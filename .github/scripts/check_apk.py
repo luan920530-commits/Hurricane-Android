@@ -34,10 +34,14 @@ def main():
         return 1
 
     nombres = z.namelist()
-    assets = [n for n in nombres if n.startswith("assets/hurrican/")]
-    datos = [n for n in assets if n.startswith("assets/hurrican/data/")]
-    idioma = [n for n in assets if n.startswith("assets/hurrican/lang/")]
-    indice = [n for n in assets if n.endswith("hurrican_index.txt")]
+    # Ojo con las rutas: en build.gradle el sourceSet de assets apunta a la carpeta
+    # generated/assets/hurrican, asi que dentro del APK los ficheros quedan como
+    # assets/data/... y assets/lang/..., sin el nivel "hurrican". El indice, en cambio, se
+    # abre desde el codigo nativo como "hurrican_index.txt", o sea assets/hurrican_index.txt.
+    assets = [n for n in nombres if n.startswith(("assets/data/", "assets/lang/"))]
+    datos = [n for n in assets if n.startswith("assets/data/")]
+    idioma = [n for n in assets if n.startswith("assets/lang/")]
+    indice = [n for n in nombres if n == "assets/hurrican_index.txt"]
     bytes_assets = sum(z.getinfo(n).file_size for n in assets)
     librerias = sorted(n for n in nombres if n.startswith("lib/"))
 
