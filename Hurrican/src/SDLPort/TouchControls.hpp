@@ -6,29 +6,14 @@
  * de teclas que consulta el juego (DirectInputClass::TouchKeyboard). Asi el juego se comporta
  * exactamente igual que con teclado.
  *
- * DISPOSICION (pensada para jugar con los dos pulgares, como en Free Fire o Call of Duty
- * Mobile; todo se puede arrastrar y el juego recuerda donde lo dejaste):
+ * DISPOSICION inspirada en un mando clasico de pantalla: d-pad y stick L a la izquierda,
+ * cuatro botones A/B/X/Y y stick R a la derecha, hombros ZL/L/ZR/R, pausa y +/-.
+ * Las posiciones se anclan a la ventana completa y escalan con su altura.
  *
- *   +--------------------------------------------------------------+
- *   | [ESC]                                              [DEBUG]   |
- *   |                                                              |
- *   |                ( zona de juego, sin overlay )                |
- *   |                                                              |
- *   |      (joystick)                        (SALTAR)              |
- *   |        MOVER                        (DISPARO)  (BLITZ)       |
- *   |                                     (POWER) (GRANADA)        |
- *   |                                     (ARMA)  (BOMBA)          |
- *   +--------------------------------------------------------------+
- *
- * Diferencias con el mando anterior (doce botones fijos):
- *
- *  - MOVER es un joystick analogico flotante: se toca en cualquier parte del tercio
- *    izquierdo y el joystick aparece bajo el dedo. Se puede deslizar sin levantarlo, y el
- *    eje X activa izquierda/derecha y el eje Y activa el apuntado arriba/abajo del original.
- *  - Los botones de accion son grandes y estan agrupados donde llega el pulgar derecho.
- *  - Todo se puede arrastrar con un dedo mantenido (modo edicion), sin tocar ficheros.
- *  - El tamano se ajusta a la pantalla: en pantallas grandes los botones crecen.
- *  - El boton DEBUG abre el panel de trucos (municion infinita, vidas infinitas...).
+ *  - D-pad y sticks admiten multitouch; el stick derecho dispara y permite apuntar arriba/abajo.
+ *  - Los botones mapean las mismas teclas que el teclado original, sin cambiar la logica del juego.
+ *  - El boton del ojo abre el panel de depuracion; la configuracion puede ocultar el overlay.
+ *  - Modo edicion y restauracion de la disposicion permanecen disponibles.
  *
  * (c) 2026 - Port de Android, misma licencia que el resto del codigo (MIT).
  **/
@@ -104,6 +89,9 @@ class TouchControlsClass {
         ACT_WEAPON,
         ACT_ESCAPE,
         ACT_DEBUG,
+        ACT_ZR,
+        ACT_MINUS,
+        ACT_PLUS,
         ACT_COUNT
     };
 
@@ -134,15 +122,19 @@ class TouchControlsClass {
 
     /// Joystick flotante de movimiento.
     bool stick_active = false;
-    int stick_finger = -1;
+    SDL_FingerID stick_finger = -1;
     float stick_origin_x = 0.0f;  ///< centro cuando se toco (pixeles)
     float stick_origin_y = 0.0f;
     float stick_x = 0.0f;  ///< desplazamiento actual del pomo (pixeles)
     float stick_y = 0.0f;
     float stick_radius = 0.0f;  ///< radio en pixeles (depende de la pantalla)
+    bool dpad_pressed[4] = {false, false, false, false};
+    bool right_stick_active = false;
+    float right_stick_x = 0.0f;
+    float right_stick_y = 0.0f;
     /// Zona donde puede nacer el joystick, normalizada.
-    float stick_zone_w = 0.42f;
-    float stick_zone_h = 0.75f;
+    float stick_zone_w = 0.43f;
+    float stick_zone_h = 0.78f;
 
     ActionButton actions[ACT_COUNT];
     std::vector<int> pressed_scancodes;
@@ -160,8 +152,8 @@ class TouchControlsClass {
     std::vector<FingerState> fingers;
 
     /// Posicion por defecto del joystick (centro), normalizada.
-    float stick_default_x = 0.11f;
-    float stick_default_y = 0.76f;
+    float stick_default_x = 0.25f;
+    float stick_default_y = 0.66f;
 };
 
 extern TouchControlsClass TouchControls;

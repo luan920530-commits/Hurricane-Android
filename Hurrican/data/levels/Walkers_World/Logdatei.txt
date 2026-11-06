@@ -139,8 +139,6 @@ s_weltend1.bmp
 
 -> GameExit erfolgreich beendet !
 
-http://www.poke53280.de
-Bugreports, Fragen etc : Eiswuxe@Poke53280.de
 
 -> Logdatei EndeBitmap laden : C:\Programme\Hurrican\data/static_flugsack.bmp erfolgreich ! 
 Bitmap laden : C:\Programme\Hurrican\data/back_cave.png erfolgreich ! 
@@ -179,8 +177,6 @@ s_weltend1.bmp
 
 -> GameExit erfolgreich beendet !
 
-http://www.poke53280.de
-Bugreports, Fragen etc : Eiswuxe@Poke53280.de
 
 -> Logdatei EndeBitmap laden : C:\Programme\Hurrican\data/static_sea.bmp erfolgreich ! 
 Bitmap laden : C:\Programme\Hurrican\data/back_tower.png erfolgreich ! 
@@ -295,8 +291,6 @@ Bitmap laden : C:\Programme\Hurrican\data/back_cave.png erfolgreich !
 
 -> GameExit erfolgreich beendet !
 
-http://www.poke53280.de
-Bugreports, Fragen etc : Eiswuxe@Poke53280.de
 
 -> Logdatei EndeBitmap laden : C:\Programme\Hurrican\data/static_end.bmp erfolgreich ! 
 Bitmap laden : C:\Programme\Hurrican\data/back_cave.png erfolgreich ! 
@@ -323,8 +317,6 @@ s_cave5.bmp
 
 -> GameExit erfolgreich beendet !
 
-http://www.poke53280.de
-Bugreports, Fragen etc : Eiswuxe@Poke53280.de
 
 -> Logdatei EndeBitmap laden : C:\Programme\Hurrican\data/static_end.bmp erfolgreich ! 
 Bitmap laden : C:\Programme\Hurrican\data/back_cave.png erfolgreich ! 
@@ -351,8 +343,6 @@ s_cave5.bmp
 
 -> GameExit erfolgreich beendet !
 
-http://www.poke53280.de
-Bugreports, Fragen etc : Eiswuxe@Poke53280.de
 
 -> Logdatei EndeBitmap laden : C:\Programme\Hurrican\data/static_end.bmp erfolgreich ! 
 Bitmap laden : C:\Programme\Hurrican\data/back_cave.png erfolgreich ! 
@@ -380,8 +370,6 @@ s_graues.bmp
 
 -> GameExit erfolgreich beendet !
 
-http://www.poke53280.de
-Bugreports, Fragen etc : Eiswuxe@Poke53280.de
 
 -> Logdatei EndeBitmap laden : C:\Programme\Hurrican\data/static_end.bmp erfolgreich ! 
 Bitmap laden : C:\Programme\Hurrican\data/back_cave.png erfolgreich ! 
@@ -420,8 +408,6 @@ Bitmap laden : C:\Programme\Hurrican\data/static_blue.bmp erfolgreich !
 
 -> GameExit erfolgreich beendet !
 
-http://www.poke53280.de
-Bugreports, Fragen etc : Eiswuxe@Poke53280.de
 
 -> Logdatei EndeBitmap laden : C:\Programme\Hurrican\data/static_blue.bmp erfolgreich ! 
 Bitmap laden : C:\Programme\Hurrican\data/back_cave.png erfolgreich ! 
@@ -631,8 +617,6 @@ s_graues.bmp
 
 -> GameExit erfolgreich beendet !
 
-http://www.poke53280.de
-Bugreports, Fragen etc : Eiswuxe@Poke53280.de
 
 -> Logdatei EndeBitmap laden : C:\Programme\Hurrican\data/static_blue.bmp erfolgreich ! 
 Bitmap laden : C:\Programme\Hurrican\data/back_cave.png erfolgreich ! 
@@ -692,8 +676,6 @@ s_weltend1.bmp
 
 -> GameExit erfolgreich beendet !
 
-http://www.poke53280.de
-Bugreports, Fragen etc : Eiswuxe@Poke53280.de
 
 -> Logdatei EndeBitmap laden : C:\Programme\Hurrican\data/static_blue.bmp erfolgreich ! 
 Bitmap laden : C:\Programme\Hurrican\data/back_cave.png erfolgreich ! 
@@ -721,8 +703,6 @@ s_graues.bmp
 
 -> GameExit erfolgreich beendet !
 
-http://www.poke53280.de
-Bugreports, Fragen etc : Eiswuxe@Poke53280.de
 
 -> Logdatei Ende
 >--------------------<
@@ -734,8 +714,6 @@ Bugreports, Fragen etc : Eiswuxe@Poke53280.de
 
 -> GameExit erfolgreich beendet !
 
-http://www.poke53280.de
-Bugreports, Fragen etc : Eiswuxe@Poke53280.de
 
 -> Logdatei EndeBitmap laden : C:\Programme\Hurrican\data/static_ice.bmp erfolgreich ! 
 Bitmap laden : C:\Programme\Hurrican\data/back_ice.png erfolgreich ! 
@@ -760,8 +738,6 @@ s_factory.bmp
 
 -> GameExit erfolgreich beendet !
 
-http://www.poke53280.de
-Bugreports, Fragen etc : Eiswuxe@Poke53280.de
 
 -> Logdatei EndeBitmap laden : C:\Programme\Hurrican\data/static_ice.bmp erfolgreich ! 
 Bitmap laden : C:\Programme\Hurrican\data/back_ice.png erfolgreich ! 
@@ -786,8 +762,6 @@ s_factory.bmp
 
 -> GameExit erfolgreich beendet !
 
-http://www.poke53280.de
-Bugreports, Fragen etc : Eiswuxe@Poke53280.de
 
 -> Logdatei EndeBitmap laden : C:\Programme\Hurrican\data/static_ice.bmp erfolgreich ! 
 Bitmap laden : C:\Programme\Hurrican\data/back_ice.png erfolgreich ! 
@@ -812,8 +786,6 @@ s_factory.bmp
 
 -> GameExit erfolgreich beendet !
 
-http://www.poke53280.de
-Bugreports, Fragen etc : Eiswuxe@Poke53280.de
 
 -> Logdatei EndeBitmap laden : C:\Programme\Hurrican\data/static_ice.bmp erfolgreich ! 
 Bitmap laden : C:\Programme\Hurrican\data/back_ice.png erfolgreich ! 
@@ -838,8 +810,6 @@ s_factory.bmp
 
 -> GameExit erfolgreich beendet !
 
-http://www.poke53280.de
-Bugreports, Fragen etc : Eiswuxe@Poke53280.de
 
 -> Logdatei EndeBitmap laden : C:\Programme\Hurrican\data/static_ice.bmp erfolgreich ! 
 Bitmap laden : C:\Programme\Hurrican\data/back_ice.png erfolgreich ! 
@@ -864,8 +834,6 @@ s_factory.bmp
 
 -> GameExit erfolgreich beendet !
 
-http://www.poke53280.de
-Bugreports, Fragen etc : Eiswuxe@Poke53280.de
 
 -> Logdatei EndeBitmap laden : C:\Programme\Hurrican\data/static_ice.bmp erfolgreich ! 
 Bitmap laden : C:\Programme\Hurrican\data/back_ice.png erfolgreich ! 
@@ -890,8 +858,6 @@ s_factory.bmp
 
 -> GameExit erfolgreich beendet !
 
-http://www.poke53280.de
-Bugreports, Fragen etc : Eiswuxe@Poke53280.de
 
 -> Logdatei EndeBitmap laden : C:\Programme\Hurrican\data/static_ice.bmp erfolgreich ! 
 Bitmap laden : C:\Programme\Hurrican\data/back_ice.png erfolgreich ! 
@@ -983,8 +949,6 @@ s_graues.bmp
 
 -> GameExit erfolgreich beendet !
 
-http://www.poke53280.de
-Bugreports, Fragen etc : Eiswuxe@Poke53280.de
 
 -> Logdatei EndeBitmap laden : C:\Programme\Hurrican\data/static_sea.bmp erfolgreich ! 
 Bitmap laden : C:\Programme\Hurrican\data/back_tower.png erfolgreich ! 
@@ -1421,8 +1385,6 @@ s_factory.bmp
 
 -> GameExit erfolgreich beendet !
 
-http://www.poke53280.de
-Bugreports, Fragen etc : Eiswuxe@Poke53280.de
 
 -> Logdatei EndeBitmap laden : C:\Programme\Hurrican\data/static_blue.bmp erfolgreich ! 
 Bitmap laden : C:\Programme\Hurrican\data/back_cave.png erfolgreich ! 
@@ -1463,8 +1425,6 @@ s_factory.bmp
 
 -> GameExit erfolgreich beendet !
 
-http://www.poke53280.de
-Bugreports, Fragen etc : Eiswuxe@Poke53280.de
 
 -> Logdatei EndeBitmap laden : C:\Programme\Hurrican\data/static_slime.bmp erfolgreich ! 
 Bitmap laden : C:\Programme\Hurrican\data/back_spinne.png erfolgreich ! 
@@ -1635,8 +1595,6 @@ s_cave.bmp
 
 -> GameExit erfolgreich beendet !
 
-http://www.poke53280.de
-Bugreports, Fragen etc : Eiswuxe@Poke53280.de
 
 -> Logdatei EndeBitmap laden : C:\Programme\Hurrican\data/static_ice.bmp erfolgreich ! 
 Bitmap laden : C:\Programme\Hurrican\data/back_ice.png erfolgreich ! 
@@ -1674,7 +1632,5 @@ s_factory.bmp
 
 -> GameExit erfolgreich beendet !
 
-http://www.poke53280.de
-Bugreports, Fragen etc : Eiswuxe@Poke53280.de
 
 -> Logdatei Ende

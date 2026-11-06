@@ -27,15 +27,15 @@ TouchControlsClass TouchControls;
 namespace {
 
 // Colores ARGB. Alfa bajo para que el overlay no tape el juego.
-constexpr std::uint32_t COLOR_BASE = 0x78202D43;
-constexpr std::uint32_t COLOR_RIM = 0x705CE0D5;
-constexpr std::uint32_t COLOR_PRESSED = 0xC02AD6C7;
-constexpr std::uint32_t COLOR_STICK_BASE = 0x48202D43;
-constexpr std::uint32_t COLOR_STICK_KNOB = 0xA0D8F4F1;
-constexpr std::uint32_t COLOR_ICON = 0xF0F2FAFF;
-constexpr std::uint32_t COLOR_EDIT = 0xB0FF8066;
-constexpr std::uint32_t COLOR_DEBUGBTN = 0xA020A978;
-constexpr std::uint32_t COLOR_DEBUG_RIM = 0xA050E2A5;
+constexpr std::uint32_t COLOR_BASE = 0x786B6B6B;
+constexpr std::uint32_t COLOR_RIM = 0x907F7F7F;
+constexpr std::uint32_t COLOR_PRESSED = 0xC0D8D8D8;
+constexpr std::uint32_t COLOR_STICK_BASE = 0x50777777;
+constexpr std::uint32_t COLOR_STICK_KNOB = 0xB0D0D0D0;
+constexpr std::uint32_t COLOR_ICON = 0xD8F2F2F2;
+constexpr std::uint32_t COLOR_EDIT = 0xC0FFD080;
+constexpr std::uint32_t COLOR_DEBUGBTN = 0x786B6B6B;
+constexpr std::uint32_t COLOR_DEBUG_RIM = 0x907F7F7F;
 
 /*
  * El motor mapea por defecto estas teclas a las acciones del jugador
@@ -54,7 +54,7 @@ constexpr std::uint32_t COLOR_DEBUG_RIM = 0xA050E2A5;
  *   DIK_ESCAPE             pausa / menu
  */
 struct ActionDef {
-    float x, y;    // centro, normalizado dentro del area de juego
+    float x, y;    // centro, normalizado con respecto a la ventana completa
     float r;       // radio, normalizado respecto a la altura de la pantalla
     SDL_Keycode key;
     bool toggle;
@@ -71,23 +71,32 @@ struct ActionDef {
  * sin taparse (disparar + saltar es la combinacion mas habitual).
  */
 const ActionDef ACTIONS[] = {
-    // Anclas en la ventana completa (x/y 0..1); los radios usan la altura para conservar
-    // botones circulares. Esto deja el juego 4:3 centrado y fija los controles a los bordes.
-    {0.905f, 0.730f, 0.090f, SDLK_LALT, false},       // ACT_JUMP
-    {0.810f, 0.875f, 0.105f, SDLK_LCTRL, false},      // ACT_FIRE
-    {0.940f, 0.895f, 0.068f, SDLK_LSHIFT, false},     // ACT_BLITZ
-    {0.690f, 0.875f, 0.068f, SDLK_SPACE, false},      // ACT_POWERLINE
-    {0.770f, 0.675f, 0.064f, SDLK_RCTRL, false},      // ACT_GRENADE
-    {0.665f, 0.710f, 0.064f, SDLK_RSHIFT, false},     // ACT_SMARTBOMB
-    {0.680f, 0.795f, 0.064f, SDLK_RETURN, false},     // ACT_WEAPON
-    {0.055f, 0.075f, 0.048f, SDLK_ESCAPE, false},     // ACT_ESCAPE
-    {0.945f, 0.075f, 0.048f, 0, true},                // ACT_DEBUG
+    // Distribucion inspirada en un mando clasico. Coordenadas ancladas a toda la ventana;
+    // los botones de hombro se dibujan como capsulas y los de accion como discos.
+    {0.850f, 0.600f, 0.055f, SDLK_LALT, false},       // ACT_JUMP    A
+    {0.795f, 0.700f, 0.055f, SDLK_LCTRL, false},      // ACT_FIRE    B
+    {0.795f, 0.500f, 0.055f, SDLK_LSHIFT, false},     // ACT_BLITZ   X
+    {0.740f, 0.600f, 0.055f, SDLK_SPACE, false},      // ACT_POWERLINE Y
+    {0.930f, 0.230f, 0.043f, SDLK_RCTRL, false},      // ACT_GRENADE R
+    {0.105f, 0.105f, 0.043f, SDLK_RSHIFT, false},     // ACT_SMARTBOMB ZL
+    {0.105f, 0.230f, 0.043f, SDLK_RETURN, false},     // ACT_WEAPON L
+    {0.975f, 0.035f, 0.030f, SDLK_ESCAPE, false},     // ACT_ESCAPE pausa
+    {0.965f, 0.805f, 0.034f, 0, true},                // ACT_DEBUG ojo
+    {0.930f, 0.105f, 0.043f, SDLK_RSHIFT, false},     // ACT_ZR: alternativa de bomba inteligente
+    {0.445f, 0.715f, 0.032f, SDLK_ESCAPE, false},      // ACT_MINUS: pausa alternativa
+    {0.590f, 0.715f, 0.032f, SDLK_RETURN, false},      // ACT_PLUS: cambio de arma alternativo
 };
 
 constexpr int ACTION_COUNT = sizeof(ACTIONS) / sizeof(ACTIONS[0]);
 
 /// Radio del joystick, como fraccion de la altura de la pantalla.
-constexpr float STICK_RADIUS_FRAC = 0.135f;
+constexpr float STICK_RADIUS_FRAC = 0.105f;
+constexpr float RIGHT_STICK_X = 0.940f;
+constexpr float RIGHT_STICK_Y = 0.465f;
+constexpr float DPAD_X = 0.115f;
+constexpr float DPAD_Y = 0.465f;
+constexpr float DPAD_BUTTON_RADIUS_FRAC = 0.066f;
+constexpr float DPAD_OFFSET_FRAC = 0.073f;
 /// Zona muerta del joystick (fraccion del radio).
 constexpr float STICK_DEADZONE = 0.30f;
 
@@ -111,10 +120,68 @@ void DrawStroke(float x1, float y1, float x2, float y2, float width, std::uint32
     g_stroke_vertices.insert(g_stroke_vertices.end(), {quad[0], quad[1], quad[2], quad[2], quad[1], quad[3]});
 }
 
+void DrawGlyph(char glyph, float cx, float cy, float size, float width, std::uint32_t color) {
+    const float half = size * 0.5f;
+    const float left = cx - half;
+    const float right = cx + half;
+    const float top = cy - half;
+    const float bottom = cy + half;
+    const float mid = cy;
+    switch (glyph) {
+        case 'A':
+            DrawStroke(left, bottom, cx, top, width, color);
+            DrawStroke(cx, top, right, bottom, width, color);
+            DrawStroke(cx - size * 0.24f, mid + size * 0.08f, cx + size * 0.24f, mid + size * 0.08f, width, color);
+            break;
+        case 'B':
+            DrawStroke(left, top, left, bottom, width, color);
+            DrawStroke(left, top, right - size * 0.12f, top, width, color);
+            DrawStroke(left, mid, right - size * 0.08f, mid, width, color);
+            DrawStroke(left, bottom, right - size * 0.12f, bottom, width, color);
+            DrawStroke(right - size * 0.12f, top, right, mid, width, color);
+            DrawStroke(right, mid, right - size * 0.12f, bottom, width, color);
+            break;
+        case 'X':
+            DrawStroke(left, top, right, bottom, width, color);
+            DrawStroke(right, top, left, bottom, width, color);
+            break;
+        case 'Y':
+            DrawStroke(left, top, cx, mid, width, color);
+            DrawStroke(right, top, cx, mid, width, color);
+            DrawStroke(cx, mid, cx, bottom, width, color);
+            break;
+        case 'L':
+            DrawStroke(left, top, left, bottom, width, color);
+            DrawStroke(left, bottom, right, bottom, width, color);
+            break;
+        case 'R':
+            DrawStroke(left, top, left, bottom, width, color);
+            DrawStroke(left, top, right - size * 0.10f, top, width, color);
+            DrawStroke(right - size * 0.10f, top, right, mid - size * 0.05f, width, color);
+            DrawStroke(right, mid - size * 0.05f, left, mid, width, color);
+            DrawStroke(cx - size * 0.02f, mid, right, bottom, width, color);
+            break;
+        case 'Z':
+            DrawStroke(left, top, right, top, width, color);
+            DrawStroke(right, top, left, bottom, width, color);
+            DrawStroke(left, bottom, right, bottom, width, color);
+            break;
+        case '-':
+            DrawStroke(left, cy, right, cy, width, color);
+            break;
+        case '+':
+            DrawStroke(left, cy, right, cy, width, color);
+            DrawStroke(cx, top, cx, bottom, width, color);
+            break;
+    }
+}
+
 }  // namespace
 
 void TouchControlsClass::Init() {
-    available = SDL_GetNumTouchDevices() > 0;
+    // Android puede registrar el touchscreen al primer evento tactil. Mantener el overlay
+    // habilitado desde el arranque evita que el estado inicial de SDL oculte el mando.
+    available = true;
 
     for (int i = 0; i < ACTION_COUNT; i++) {
         actions[i].x = ACTIONS[i].x;
@@ -131,6 +198,9 @@ void TouchControlsClass::Init() {
     editing = false;
     stick_active = false;
     stick_finger = -1;
+    right_stick_active = false;
+    right_stick_x = right_stick_y = 0.0f;
+    std::fill(std::begin(dpad_pressed), std::end(dpad_pressed), false);
     debug_requested = false;
 
     Protokoll << "Mando virtual: " << (available ? "pantalla tactil detectada" : "sin pantalla tactil")
@@ -164,8 +234,8 @@ void TouchControlsClass::ResetLayout() {
         actions[i].y = ACTIONS[i].y;
         actions[i].r = ACTIONS[i].r;
     }
-    stick_default_x = 0.11f;
-    stick_default_y = 0.76f;
+    stick_default_x = 0.25f;
+    stick_default_y = 0.66f;
     Protokoll << "Mando virtual: disposicion restablecida" << std::endl;
 }
 
@@ -191,6 +261,9 @@ void TouchControlsClass::ClearKeys() {
     stick_active = false;
     stick_finger = -1;
     stick_x = stick_y = 0.0f;
+    std::fill(std::begin(dpad_pressed), std::end(dpad_pressed), false);
+    right_stick_active = false;
+    right_stick_x = right_stick_y = 0.0f;
 }
 
 void TouchControlsClass::ComputePixels(const SDL_Rect &screen_rect, float &scale) {
@@ -213,10 +286,16 @@ void TouchControlsClass::UpdateJoystick() {
     const bool up = len > dead && stick_y < 0.0f;
     const bool down = len > dead && stick_y > 0.0f;
 
-    auto set = [](SDL_Scancode sc, bool on) {
+    auto set = [this](SDL_Scancode sc, bool on) {
         if (!on)
             return;
-        const_cast<Uint8 *>(TastaturPuffer)[sc] = 1;
+        const int key = static_cast<int>(sc);
+        if (key <= 0 || key >= MAX_KEYS)
+            return;
+        if (std::find(pressed_scancodes.begin(), pressed_scancodes.end(), key) == pressed_scancodes.end()) {
+            const_cast<Uint8 *>(TastaturPuffer)[key] = 1;
+            pressed_scancodes.push_back(key);
+        }
     };
     set(SDL_SCANCODE_LEFT, left);
     set(SDL_SCANCODE_RIGHT, right);
@@ -295,15 +374,38 @@ void TouchControlsClass::Update(const SDL_Rect &screen_rect, int win_w, int win_
     pressed_scancodes.clear();
     for (int i = 0; i < ACTION_COUNT; i++)
         actions[i].pressed = false;
+    std::fill(std::begin(dpad_pressed), std::end(dpad_pressed), false);
 
     stick_radius = STICK_RADIUS_FRAC * static_cast<float>(win_h);
     stick_x = stick_y = 0.0f;
+    right_stick_active = false;
+    right_stick_x = right_stick_y = 0.0f;
+    bool stick_finger_seen = false;
 
-    // 2) Un solo dedo manda en el joystick: el que empezo en su zona. Los demas pueden
-    //    pulsar botones a la vez (multitactil real).
-    const SDL_TouchID device = SDL_GetTouchDevice(0);
-    const int fingers_count = device == 0 ? 0 : SDL_GetNumTouchFingers(device);
+    auto press_scancode = [this](SDL_Scancode scancode) {
+        const int key = static_cast<int>(scancode);
+        if (key <= 0 || key >= MAX_KEYS)
+            return;
+        if (std::find(pressed_scancodes.begin(), pressed_scancodes.end(), key) == pressed_scancodes.end()) {
+            const_cast<Uint8 *>(TastaturPuffer)[key] = 1;
+            pressed_scancodes.push_back(key);
+        }
+    };
 
+    // Android usa el id 0 para el touchscreen. No debe tratarse como "sin dispositivo".
+    const int touch_device_count = SDL_GetNumTouchDevices();
+    const SDL_TouchID device = touch_device_count > 0 ? SDL_GetTouchDevice(0) : 0;
+    const int fingers_count = touch_device_count > 0 ? std::max(0, SDL_GetNumTouchFingers(device)) : 0;
+    const float h = static_cast<float>(win_h);
+    const float dpad_cx = screen_rect.x + DPAD_X * screen_rect.w;
+    const float dpad_cy = screen_rect.y + DPAD_Y * screen_rect.h;
+    const float dpad_offset = DPAD_OFFSET_FRAC * h;
+    const float dpad_radius = DPAD_BUTTON_RADIUS_FRAC * h;
+    const float right_cx = screen_rect.x + RIGHT_STICK_X * screen_rect.w;
+    const float right_cy = screen_rect.y + RIGHT_STICK_Y * screen_rect.h;
+    const float right_radius = 0.105f * h;
+
+    // Un dedo controla cada joystick; el d-pad y los botones admiten multitouch simultaneo.
     for (int i = 0; i < fingers_count; i++) {
         SDL_Finger *finger = SDL_GetTouchFinger(device, i);
         if (finger == nullptr)
@@ -311,7 +413,6 @@ void TouchControlsClass::Update(const SDL_Rect &screen_rect, int win_w, int win_
 
         const float px = finger->x * static_cast<float>(win_w);
         const float py = finger->y * static_cast<float>(win_h);
-
         if (px < screen_rect.x || py < screen_rect.y || px > screen_rect.x + screen_rect.w ||
             py > screen_rect.y + screen_rect.h)
             continue;
@@ -319,55 +420,92 @@ void TouchControlsClass::Update(const SDL_Rect &screen_rect, int win_w, int win_
         const float nx = (px - screen_rect.x) / static_cast<float>(screen_rect.w);
         const float ny = (py - screen_rect.y) / static_cast<float>(screen_rect.h);
 
-        // 2a) Botones.
+        // Una vez iniciado, el stick sigue al mismo dedo aunque cruce otras zonas.
+        if (stick_active && stick_finger == finger->id) {
+            stick_finger_seen = true;
+            float dx = px - stick_origin_x;
+            float dy = py - stick_origin_y;
+            const float len = std::sqrt(dx * dx + dy * dy);
+            if (len > stick_radius) {
+                dx *= stick_radius / len;
+                dy *= stick_radius / len;
+            }
+            stick_x = dx;
+            stick_y = dy;
+            continue;
+        }
+
         bool used = false;
+
+        // D-pad de cuatro botones separados, como en el mando de referencia.
+        const float dpad_x = px - dpad_cx;
+        const float dpad_y = py - dpad_cy;
+        const struct DpadButton { float x, y; SDL_Scancode key; } dpad[] = {
+            {-dpad_offset, 0.0f, SDL_SCANCODE_LEFT}, {dpad_offset, 0.0f, SDL_SCANCODE_RIGHT},
+            {0.0f, -dpad_offset, SDL_SCANCODE_UP}, {0.0f, dpad_offset, SDL_SCANCODE_DOWN},
+        };
+        for (int direction = 0; direction < 4; ++direction) {
+            const auto &button = dpad[direction];
+            if (std::hypot(dpad_x - button.x, dpad_y - button.y) <= dpad_radius) {
+                dpad_pressed[direction] = true;
+                press_scancode(button.key);
+                used = true;
+                break;
+            }
+        }
+        if (used)
+            continue;
+
+        // El stick derecho mantiene el disparo; al arrastrarlo arriba/abajo tambien apunta.
+        const float right_dx = px - right_cx;
+        const float right_dy = py - right_cy;
+        if (std::hypot(right_dx, right_dy) <= right_radius) {
+            right_stick_active = true;
+            right_stick_x = right_dx;
+            right_stick_y = right_dy;
+            press_scancode(SDL_SCANCODE_LCTRL);
+            if (right_dy < -right_radius * 0.28f)
+                press_scancode(SDL_SCANCODE_UP);
+            else if (right_dy > right_radius * 0.28f)
+                press_scancode(SDL_SCANCODE_DOWN);
+            continue;
+        }
+
+        // Botones frontales, hombros, pausa y los botones +/-.
         for (int b = 0; b < ACTION_COUNT; b++) {
             if (actions[b].pressed)
                 continue;
 
-            const float rx = actions[b].r * static_cast<float>(win_h) / static_cast<float>(screen_rect.w);
-            const float ry = actions[b].r;
-
-            const float dx = (nx - actions[b].x) / (rx > 0.0f ? rx : 1.0f);
-            const float dy = (ny - actions[b].y) / (ry > 0.0f ? ry : 1.0f);
+            const bool shoulder = b == ACT_GRENADE || b == ACT_SMARTBOMB || b == ACT_WEAPON || b == ACT_ZR;
+            const float rx = actions[b].r * (shoulder ? 1.70f : 1.0f) * h / screen_rect.w;
+            const float ry = actions[b].r * (shoulder ? 0.90f : 1.0f);
+            const float dx = (nx - actions[b].x) / rx;
+            const float dy = (ny - actions[b].y) / ry;
             if (dx * dx + dy * dy > 1.0f)
                 continue;
 
             actions[b].pressed = true;
             used = true;
-
             if (actions[b].is_toggle) {
-                // El boton de debug solo avisa del toque; el panel lo gestiona DebugPanel.
                 if (b == ACT_DEBUG)
                     debug_requested = true;
             } else if (actions[b].scancode > 0) {
-                const_cast<Uint8 *>(TastaturPuffer)[actions[b].scancode] = 1;
-                pressed_scancodes.push_back(actions[b].scancode);
+                press_scancode(static_cast<SDL_Scancode>(actions[b].scancode));
             }
             break;
         }
         if (used)
             continue;
 
-        /*
-         * 2b) Joystick flotante.
-         *
-         * No esta atado a una posicion fija: cualquier toque en la zona de movimiento lo
-         * "crea" ahi mismo (asi lo hacen los juegos de accion en movil, y es mucho mas
-         * comodo que buscar un circulo dibujado). Si hay un joystick dibujado en su sitio
-         * por defecto y se toca ahi, tambien funciona.
-         */
+        // Stick izquierdo analogo. Se puede iniciar dentro de la zona izquierda o sobre su aro.
         const bool in_zone = nx < stick_zone_w && ny < stick_zone_h;
         const bool on_drawn_stick =
             std::hypot((nx - stick_default_x) * screen_rect.w, (ny - stick_default_y) * screen_rect.h) <
             stick_radius * 1.2f;
-
         if (in_zone || on_drawn_stick) {
             if (!stick_active) {
                 stick_active = true;
-                stick_finger = i;
-                // Si el toque fue cerca del joystick dibujado, se centra en el; si no, nace
-                // bajo el dedo.
+                stick_finger = finger->id;
                 if (on_drawn_stick) {
                     stick_origin_x = screen_rect.x + stick_default_x * screen_rect.w;
                     stick_origin_y = screen_rect.y + stick_default_y * screen_rect.h;
@@ -375,22 +513,13 @@ void TouchControlsClass::Update(const SDL_Rect &screen_rect, int win_w, int win_
                     stick_origin_x = px;
                     stick_origin_y = py;
                 }
-            }
-            if (stick_finger == i) {
-                float dx = px - stick_origin_x;
-                float dy = py - stick_origin_y;
-                const float len = std::sqrt(dx * dx + dy * dy);
-                if (len > stick_radius) {
-                    dx *= stick_radius / len;
-                    dy *= stick_radius / len;
-                }
-                stick_x = dx;
-                stick_y = dy;
+                stick_finger_seen = true;
+                stick_x = stick_y = 0.0f;
             }
         }
     }
 
-    if (fingers_count == 0) {
+    if (!stick_finger_seen) {
         stick_active = false;
         stick_finger = -1;
     }
@@ -449,139 +578,125 @@ void TouchControlsClass::DrawDisc(float cx, float cy, float rx, float ry, std::u
 }
 
 void TouchControlsClass::DrawGeometry(const SDL_Rect &screen_rect) {
-    if (!g_initialised || !active)
-        return;
-    if (screen_rect.w <= 0 || screen_rect.h <= 0)
+    if (!g_initialised || !active || screen_rect.w <= 0 || screen_rect.h <= 0)
         return;
 
-    const float escala = static_cast<float>(screen_rect.h);
+    const float h = static_cast<float>(screen_rect.h);
+    const float dpad_cx = screen_rect.x + DPAD_X * screen_rect.w;
+    const float dpad_cy = screen_rect.y + DPAD_Y * screen_rect.h;
+    const float offset = DPAD_OFFSET_FRAC * h;
+    const float dpad_r = DPAD_BUTTON_RADIUS_FRAC * h;
+    const float left_cx = screen_rect.x + stick_default_x * screen_rect.w;
+    const float left_cy = screen_rect.y + stick_default_y * screen_rect.h;
+    const float left_r = STICK_RADIUS_FRAC * h;
+    const float right_cx = screen_rect.x + RIGHT_STICK_X * screen_rect.w;
+    const float right_cy = screen_rect.y + RIGHT_STICK_Y * screen_rect.h;
+    const float right_r = 0.105f * h;
+
     g_stroke_vertices.clear();
-    g_stroke_vertices.reserve(512);
+    g_stroke_vertices.reserve(768);
 
-    // --- Joystick -----------------------------------------------------------------------
-    {
-        const float cx = screen_rect.x + stick_default_x * screen_rect.w;
-        const float cy = screen_rect.y + stick_default_y * screen_rect.h;
-        const float r = STICK_RADIUS_FRAC * escala;
-
-        // Si esta en uso, el joystick se dibuja donde nacio.
-        const float bx = stick_active ? stick_origin_x : cx;
-        const float by = stick_active ? stick_origin_y : cy;
-
-        DrawDisc(bx, by, r * 1.08f, r * 1.08f, 0x38202D43);
-        DrawDisc(bx, by, r, r, 0x5549D2C7);
-        DrawDisc(bx, by, r * 0.94f, r * 0.94f, COLOR_STICK_BASE);
-        DrawDisc(bx, by, r * 0.43f, r * 0.43f, 0x7048C9C0);
-        DrawDisc(bx, by, r * 0.34f, r * 0.34f, COLOR_STICK_KNOB);
-
-        if (stick_active) {
-            // Pomo desplazado y un brillo suave mientras se mueve.
-            DrawDisc(bx + stick_x, by + stick_y, r * 0.39f, r * 0.39f, 0x70D5FFF8);
-        } else {
-            // Indicadores direccionales discretos alrededor del joystick.
-            const float s = r * 0.12f;
-            for (int direction = 0; direction < 4; ++direction) {
-                const float angle = direction * 1.5707963f;
-                const float ax = bx + cosf(angle) * r * 0.70f;
-                const float ay = by + sinf(angle) * r * 0.70f;
-                const float vx = cosf(angle) * s;
-                const float vy = sinf(angle) * s;
-                DrawStroke(ax - vx + vy * 0.75f, ay - vy - vx * 0.75f,
-                           ax + vx, ay + vy, s * 0.30f, 0xB8E8F5F5);
-                DrawStroke(ax - vx - vy * 0.75f, ay - vy + vx * 0.75f,
-                           ax + vx, ay + vy, s * 0.30f, 0xB8E8F5F5);
-            }
+    // D-pad: four raised, softly translucent buttons with clear direction chevrons.
+    const float dpad_x[] = {-offset, offset, 0.0f, 0.0f};
+    const float dpad_y[] = {0.0f, 0.0f, -offset, offset};
+    for (int i = 0; i < 4; ++i) {
+        const float cx = dpad_cx + dpad_x[i];
+        const float cy = dpad_cy + dpad_y[i];
+        DrawDisc(cx, cy + dpad_r * 0.08f, dpad_r * 1.08f, dpad_r * 1.08f, 0x48000000);
+        DrawDisc(cx, cy, dpad_r * 1.03f, dpad_r * 1.03f, COLOR_RIM);
+        DrawDisc(cx, cy, dpad_r * 0.91f, dpad_r * 0.91f, dpad_pressed[i] ? COLOR_PRESSED : COLOR_BASE);
+        const float s = dpad_r * 0.30f;
+        const float w = std::max(1.5f, dpad_r * 0.12f);
+        switch (i) {
+            case 0: // left
+                DrawStroke(cx + s * 0.45f, cy - s, cx - s * 0.45f, cy, w, COLOR_ICON);
+                DrawStroke(cx - s * 0.45f, cy, cx + s * 0.45f, cy + s, w, COLOR_ICON);
+                break;
+            case 1: // right
+                DrawStroke(cx - s * 0.45f, cy - s, cx + s * 0.45f, cy, w, COLOR_ICON);
+                DrawStroke(cx + s * 0.45f, cy, cx - s * 0.45f, cy + s, w, COLOR_ICON);
+                break;
+            case 2: // up
+                DrawStroke(cx - s, cy + s * 0.45f, cx, cy - s * 0.45f, w, COLOR_ICON);
+                DrawStroke(cx, cy - s * 0.45f, cx + s, cy + s * 0.45f, w, COLOR_ICON);
+                break;
+            case 3: // down
+                DrawStroke(cx - s, cy - s * 0.45f, cx, cy + s * 0.45f, w, COLOR_ICON);
+                DrawStroke(cx, cy + s * 0.45f, cx + s, cy - s * 0.45f, w, COLOR_ICON);
+                break;
         }
     }
 
-    // --- Botones ------------------------------------------------------------------------
-    for (int i = 0; i < ACTION_COUNT; i++) {
+    auto draw_stick = [&](float cx, float cy, float r, bool is_active, float dx, float dy, char label) {
+        const float knob_x = cx + (is_active ? dx : 0.0f);
+        const float knob_y = cy + (is_active ? dy : 0.0f);
+        DrawDisc(cx, cy + r * 0.08f, r * 1.12f, r * 1.12f, 0x48000000);
+        DrawDisc(cx, cy, r * 1.04f, r * 1.04f, COLOR_RIM);
+        DrawDisc(cx, cy, r * 0.91f, r * 0.91f, COLOR_STICK_BASE);
+        DrawDisc(knob_x, knob_y, r * 0.55f, r * 0.55f,
+                 is_active ? COLOR_PRESSED : COLOR_STICK_KNOB);
+        DrawGlyph(label, knob_x, knob_y, r * 0.52f, std::max(1.7f, r * 0.09f), 0xE0484848);
+    };
+    draw_stick(left_cx, left_cy, left_r, stick_active, stick_x, stick_y, 'L');
+    draw_stick(right_cx, right_cy, right_r, right_stick_active, right_stick_x, right_stick_y, 'R');
+
+    // Face buttons, shoulder triggers, pause, +/- and debug, positioned like the reference.
+    for (int i = 0; i < ACTION_COUNT; ++i) {
         const float cx = screen_rect.x + actions[i].x * screen_rect.w;
         const float cy = screen_rect.y + actions[i].y * screen_rect.h;
-        const float r = actions[i].r * escala;
+        const float r = actions[i].r * h;
+        const bool shoulder = i == ACT_GRENADE || i == ACT_SMARTBOMB || i == ACT_WEAPON || i == ACT_ZR;
+        const float rx = r * (shoulder ? 1.70f : 1.0f);
+        const float ry = r * (shoulder ? 0.90f : 1.0f);
+        const std::uint32_t fill = actions[i].pressed ? COLOR_PRESSED : COLOR_BASE;
+        DrawDisc(cx, cy + ry * 0.09f, rx * 1.10f, ry * 1.10f, 0x48000000);
+        DrawDisc(cx, cy, rx * 1.04f, ry * 1.04f, COLOR_RIM);
+        DrawDisc(cx, cy, rx * 0.91f, ry * 0.91f,
+                 actions[i].is_toggle ? COLOR_DEBUGBTN : fill);
 
-        const std::uint32_t rim = actions[i].is_toggle ? COLOR_DEBUG_RIM : COLOR_RIM;
-        const std::uint32_t color = actions[i].is_toggle
-                                        ? COLOR_DEBUGBTN
-                                        : (actions[i].pressed ? COLOR_PRESSED : COLOR_BASE);
-
-        // Boton tipo cristal: sombra, aro turquesa fino y superficie oscura de alto contraste.
-        DrawDisc(cx, cy + r * 0.07f, r * 1.10f, r * 1.10f, 0x52000000);
-        DrawDisc(cx, cy, r * 1.04f, r * 1.04f, rim);
-        DrawDisc(cx, cy, r * 0.96f, r * 0.96f, color);
-        DrawDisc(cx, cy - r * 0.18f, r * 0.68f, r * 0.68f,
-                 actions[i].pressed ? 0x243BFFF0 : 0x182BFFF0);
-
-        const float w = std::max(2.0f, r * 0.105f);
-        const std::uint32_t icon = COLOR_ICON;
+        const float glyph_size = shoulder ? r * 0.78f : r * 0.78f;
+        const float glyph_width = std::max(1.5f, r * 0.12f);
         switch (i) {
-            case ACT_JUMP: // flecha arriba
-                DrawStroke(cx, cy + r * 0.34f, cx, cy - r * 0.30f, w, icon);
-                DrawStroke(cx, cy - r * 0.30f, cx - r * 0.28f, cy - r * 0.02f, w, icon);
-                DrawStroke(cx, cy - r * 0.30f, cx + r * 0.28f, cy - r * 0.02f, w, icon);
+            case ACT_JUMP: DrawGlyph('A', cx, cy, glyph_size, glyph_width, COLOR_ICON); break;
+            case ACT_FIRE: DrawGlyph('B', cx, cy, glyph_size, glyph_width, COLOR_ICON); break;
+            case ACT_BLITZ: DrawGlyph('X', cx, cy, glyph_size, glyph_width, COLOR_ICON); break;
+            case ACT_POWERLINE: DrawGlyph('Y', cx, cy, glyph_size, glyph_width, COLOR_ICON); break;
+            case ACT_GRENADE: DrawGlyph('R', cx, cy, glyph_size, glyph_width, COLOR_ICON); break;
+            case ACT_SMARTBOMB:
+                DrawGlyph('Z', cx - r * 0.19f, cy, glyph_size * 0.60f, glyph_width, COLOR_ICON);
+                DrawGlyph('L', cx + r * 0.20f, cy, glyph_size * 0.60f, glyph_width, COLOR_ICON);
                 break;
-            case ACT_FIRE: // reticula / disparo
-                DrawDisc(cx, cy, r * 0.38f, r * 0.38f, 0xE0F2FAFF);
-                DrawDisc(cx, cy, r * 0.23f, r * 0.23f, color);
-                DrawDisc(cx, cy, r * 0.095f, r * 0.095f, icon);
-                DrawStroke(cx + r * 0.15f, cy - r * 0.15f, cx + r * 0.46f, cy - r * 0.46f, w, icon);
+            case ACT_WEAPON: DrawGlyph('L', cx, cy, glyph_size, glyph_width, COLOR_ICON); break;
+            case ACT_ESCAPE:
+                DrawStroke(cx - r * 0.22f, cy - r * 0.34f, cx - r * 0.22f, cy + r * 0.34f,
+                           glyph_width * 1.5f, COLOR_ICON);
+                DrawStroke(cx + r * 0.22f, cy - r * 0.34f, cx + r * 0.22f, cy + r * 0.34f,
+                           glyph_width * 1.5f, COLOR_ICON);
                 break;
-            case ACT_BLITZ: // rayo
-                DrawStroke(cx + r * 0.08f, cy - r * 0.43f, cx - r * 0.22f, cy + r * 0.02f, w, icon);
-                DrawStroke(cx - r * 0.22f, cy + r * 0.02f, cx + r * 0.04f, cy + r * 0.02f, w, icon);
-                DrawStroke(cx + r * 0.04f, cy + r * 0.02f, cx - r * 0.10f, cy + r * 0.42f, w, icon);
+            case ACT_DEBUG:
+                DrawStroke(cx - r * 0.46f, cy, cx, cy - r * 0.24f, glyph_width, COLOR_ICON);
+                DrawStroke(cx, cy - r * 0.24f, cx + r * 0.46f, cy, glyph_width, COLOR_ICON);
+                DrawStroke(cx + r * 0.46f, cy, cx, cy + r * 0.24f, glyph_width, COLOR_ICON);
+                DrawStroke(cx, cy + r * 0.24f, cx - r * 0.46f, cy, glyph_width, COLOR_ICON);
+                DrawDisc(cx, cy, r * 0.12f, r * 0.12f, COLOR_ICON);
                 break;
-            case ACT_POWERLINE: // pulso de energia
-                DrawStroke(cx - r * 0.40f, cy + r * 0.12f, cx - r * 0.17f, cy + r * 0.12f, w, icon);
-                DrawStroke(cx - r * 0.17f, cy + r * 0.12f, cx - r * 0.02f, cy - r * 0.28f, w, icon);
-                DrawStroke(cx - r * 0.02f, cy - r * 0.28f, cx + r * 0.16f, cy + r * 0.25f, w, icon);
-                DrawStroke(cx + r * 0.16f, cy + r * 0.25f, cx + r * 0.40f, cy - r * 0.10f, w, icon);
+            case ACT_ZR:
+                DrawGlyph('Z', cx - r * 0.19f, cy, glyph_size * 0.60f, glyph_width, COLOR_ICON);
+                DrawGlyph('R', cx + r * 0.20f, cy, glyph_size * 0.60f, glyph_width, COLOR_ICON);
                 break;
-            case ACT_GRENADE: // granada con espoleta
-                DrawDisc(cx, cy + r * 0.04f, r * 0.27f, r * 0.31f, icon);
-                DrawDisc(cx, cy + r * 0.04f, r * 0.17f, r * 0.21f, color);
-                DrawStroke(cx - r * 0.10f, cy - r * 0.28f, cx + r * 0.12f, cy - r * 0.38f, w, icon);
-                DrawStroke(cx + r * 0.12f, cy - r * 0.38f, cx + r * 0.30f, cy - r * 0.29f, w, icon);
-                break;
-            case ACT_SMARTBOMB: // explosion
-                DrawDisc(cx, cy, r * 0.18f, r * 0.18f, icon);
-                for (int ray = 0; ray < 8; ++ray) {
-                    const float a = ray * 0.7853982f;
-                    DrawStroke(cx + cosf(a) * r * 0.29f, cy + sinf(a) * r * 0.29f,
-                               cx + cosf(a) * r * 0.44f, cy + sinf(a) * r * 0.44f, w, icon);
-                }
-                break;
-            case ACT_WEAPON: // arma estilizada
-                DrawStroke(cx - r * 0.40f, cy - r * 0.12f, cx + r * 0.30f, cy - r * 0.12f, w * 1.4f, icon);
-                DrawStroke(cx + r * 0.30f, cy - r * 0.12f, cx + r * 0.42f, cy - r * 0.02f, w, icon);
-                DrawStroke(cx - r * 0.16f, cy - r * 0.10f, cx - r * 0.06f, cy + r * 0.28f, w, icon);
-                DrawStroke(cx - r * 0.06f, cy + r * 0.28f, cx + r * 0.12f, cy + r * 0.28f, w, icon);
-                break;
-            case ACT_ESCAPE: // pausa
-                DrawStroke(cx - r * 0.16f, cy - r * 0.30f, cx - r * 0.16f, cy + r * 0.30f, w * 1.5f, icon);
-                DrawStroke(cx + r * 0.16f, cy - r * 0.30f, cx + r * 0.16f, cy + r * 0.30f, w * 1.5f, icon);
-                break;
-            case ACT_DEBUG: // ajustes / panel
-                DrawDisc(cx, cy, r * 0.13f, r * 0.13f, icon);
-                for (int spoke = 0; spoke < 8; ++spoke) {
-                    const float a = spoke * 0.7853982f;
-                    DrawStroke(cx + cosf(a) * r * 0.23f, cy + sinf(a) * r * 0.23f,
-                               cx + cosf(a) * r * 0.43f, cy + sinf(a) * r * 0.43f, w, icon);
-                }
-                break;
+            case ACT_MINUS: DrawGlyph('-', cx, cy, glyph_size * 0.95f, glyph_width, COLOR_ICON); break;
+            case ACT_PLUS: DrawGlyph('+', cx, cy, glyph_size * 0.95f, glyph_width, COLOR_ICON); break;
         }
 
         if (editing)
-            DrawDisc(cx, cy, r * 0.08f, r * 0.08f, COLOR_EDIT);
+            DrawDisc(cx, cy, r * 0.10f, r * 0.10f, COLOR_EDIT);
     }
 
-    // Trazos de todos los iconos en un unico draw call, importante para no penalizar
-    // los moviles de gama baja con una llamada OpenGL por segmento.
+    // Batch every line/letter in one draw call to keep the overlay light on mobile GPUs.
     if (!g_stroke_vertices.empty()) {
         DirectGraphics.DrawColorVertices(GL_TRIANGLES,
                                          static_cast<std::uint32_t>(g_stroke_vertices.size()),
                                          g_stroke_vertices.data(), DirectGraphics.GetWindowProjection());
     }
 }
-
 #endif /* ANDROID */

@@ -6,7 +6,7 @@
 //
 // (c) 2004
 // Jörg M. Winterstein
-// http://www.poke53280.de
+// Fast trigonometry helpers for the Hurrican renderer.
 //
 // --------------------------------------------------------------------------------------
 
