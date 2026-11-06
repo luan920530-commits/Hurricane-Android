@@ -482,10 +482,10 @@ void TouchControlsClass::DrawGeometry(const SDL_Rect &screen_rect) {
             const float s = r * 0.12f;
             for (int direction = 0; direction < 4; ++direction) {
                 const float angle = direction * 1.5707963f;
-                const float ax = bx + std::cos(angle) * r * 0.70f;
-                const float ay = by + std::sin(angle) * r * 0.70f;
-                const float vx = std::cos(angle) * s;
-                const float vy = std::sin(angle) * s;
+                const float ax = bx + cosf(angle) * r * 0.70f;
+                const float ay = by + sinf(angle) * r * 0.70f;
+                const float vx = cosf(angle) * s;
+                const float vy = sinf(angle) * s;
                 DrawStroke(ax - vx + vy * 0.75f, ay - vy - vx * 0.75f,
                            ax + vx, ay + vy, s * 0.30f, 0xB8E8F5F5);
                 DrawStroke(ax - vx - vy * 0.75f, ay - vy + vx * 0.75f,
@@ -547,8 +547,8 @@ void TouchControlsClass::DrawGeometry(const SDL_Rect &screen_rect) {
                 DrawDisc(cx, cy, r * 0.18f, r * 0.18f, icon);
                 for (int ray = 0; ray < 8; ++ray) {
                     const float a = ray * 0.7853982f;
-                    DrawStroke(cx + std::cos(a) * r * 0.29f, cy + std::sin(a) * r * 0.29f,
-                               cx + std::cos(a) * r * 0.44f, cy + std::sin(a) * r * 0.44f, w, icon);
+                    DrawStroke(cx + cosf(a) * r * 0.29f, cy + sinf(a) * r * 0.29f,
+                               cx + cosf(a) * r * 0.44f, cy + sinf(a) * r * 0.44f, w, icon);
                 }
                 break;
             case ACT_WEAPON: // arma estilizada
@@ -565,8 +565,8 @@ void TouchControlsClass::DrawGeometry(const SDL_Rect &screen_rect) {
                 DrawDisc(cx, cy, r * 0.13f, r * 0.13f, icon);
                 for (int spoke = 0; spoke < 8; ++spoke) {
                     const float a = spoke * 0.7853982f;
-                    DrawStroke(cx + std::cos(a) * r * 0.23f, cy + std::sin(a) * r * 0.23f,
-                               cx + std::cos(a) * r * 0.43f, cy + std::sin(a) * r * 0.43f, w, icon);
+                    DrawStroke(cx + cosf(a) * r * 0.23f, cy + sinf(a) * r * 0.23f,
+                               cx + cosf(a) * r * 0.43f, cy + sinf(a) * r * 0.43f, w, icon);
                 }
                 break;
         }
