@@ -190,6 +190,28 @@ jobs:
             exit 1
           fi
           echo "APK: $APK ($(du -h "$APK" | cut -f1))"
+
+          # Que la APK se genere no significa que sea jugable: los datos del juego (~91 MB)
+          # tienen que estar dentro. Se comprueba aqui y no se da por hecho, porque un APK
+          # sin datos arranca y se queda en una pantalla en negro.
+          contenido=$(unzip -l "$APK")
+          n_datos=$(echo "$contenido" | grep -c "assets/hurrican/data/")
+          n_idioma=$(echo "$contenido" | grep -c "assets/hurrican/lang/")
+          echo "Ficheros de datos: $n_datos, de idioma: $n_idioma"
+          # Tamano SIN comprimir de los assets (columna 1 de unzip -l).
+          bytes_assets=$(echo "$contenido" | awk '/assets\/hurrican\// {s+=$1} END {print s+0}')
+          echo "Assets sin comprimir: $((bytes_assets / 1024 / 1024)) MB"
+
+          if [ "$n_datos" -lt 500 ] || [ "$n_idioma" -lt 5 ] || [ "$bytes_assets" -lt 60000000 ]; then
+            echo "::error::La APK no lleva los datos del juego (esperados >500 ficheros de datos, >5 de idioma y >60 MB)"
+            echo "$contenido" | grep "assets/" | head -n 20
+            exit 1
+          fi
+
+          # Nombre de paquete y versiones, para dejar constancia en el log.
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$APK" 2>/dev/null \
+            | grep -E "^(package|sdkVersion|targetSdkVersion|native-code)" || true
+
           echo "apk=$APK" >> "$GITHUB_OUTPUT"
 
       - name: Subir la APK como artefacto
