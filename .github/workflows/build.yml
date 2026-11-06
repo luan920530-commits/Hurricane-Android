@@ -82,6 +82,11 @@ jobs:
           echo "Datos del juego presentes:"
           du -sh Hurrican/data Hurrican/lang
 
+      # Comprobacion barata (segundos) de un fallo que, si no, solo aparece tras compilar:
+      # un fichero que existe en local pero se quedo fuera del repositorio por .gitignore.
+      - name: Comprobar que todos los #include apuntan a ficheros del repositorio
+        run: python3 .github/scripts/check_includes.py .
+
       - name: Instalar JDK 17
         uses: actions/setup-java@v4
         with:
