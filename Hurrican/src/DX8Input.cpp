@@ -200,8 +200,8 @@ bool DirectInputClass::UpdateTastatur() {
         }
         TastaturPuffer = TouchKeyboard;
     }
-    TouchControls.Update(DirectGraphics.GetRenderRect(), DirectGraphics.GetWindowWidth(),
-                         DirectGraphics.GetWindowHeight());
+    const SDL_Rect touch_area{0, 0, DirectGraphics.GetWindowWidth(), DirectGraphics.GetWindowHeight()};
+    TouchControls.Update(touch_area, DirectGraphics.GetWindowWidth(), DirectGraphics.GetWindowHeight());
 #endif
     return true;
 }

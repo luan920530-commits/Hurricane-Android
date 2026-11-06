@@ -27,12 +27,15 @@ TouchControlsClass TouchControls;
 namespace {
 
 // Colores ARGB. Alfa bajo para que el overlay no tape el juego.
-constexpr std::uint32_t COLOR_BASE = 0x30FFFFFF;
-constexpr std::uint32_t COLOR_PRESSED = 0x90FFD24A;
-constexpr std::uint32_t COLOR_STICK_BASE = 0x28FFFFFF;
-constexpr std::uint32_t COLOR_STICK_KNOB = 0x50FFFFFF;
-constexpr std::uint32_t COLOR_EDIT = 0x60FF5030;
-constexpr std::uint32_t COLOR_DEBUGBTN = 0x4020FF50;
+constexpr std::uint32_t COLOR_BASE = 0x78202D43;
+constexpr std::uint32_t COLOR_RIM = 0x705CE0D5;
+constexpr std::uint32_t COLOR_PRESSED = 0xC02AD6C7;
+constexpr std::uint32_t COLOR_STICK_BASE = 0x48202D43;
+constexpr std::uint32_t COLOR_STICK_KNOB = 0xA0D8F4F1;
+constexpr std::uint32_t COLOR_ICON = 0xF0F2FAFF;
+constexpr std::uint32_t COLOR_EDIT = 0xB0FF8066;
+constexpr std::uint32_t COLOR_DEBUGBTN = 0xA020A978;
+constexpr std::uint32_t COLOR_DEBUG_RIM = 0xA050E2A5;
 
 /*
  * El motor mapea por defecto estas teclas a las acciones del jugador
@@ -55,7 +58,6 @@ struct ActionDef {
     float r;       // radio, normalizado respecto a la altura de la pantalla
     SDL_Keycode key;
     bool toggle;
-    const char *label;
 };
 
 /*
@@ -69,16 +71,17 @@ struct ActionDef {
  * sin taparse (disparar + saltar es la combinacion mas habitual).
  */
 const ActionDef ACTIONS[] = {
-    //     x       y       r       tecla          toggle  etiqueta
-    {0.905f, 0.760f, 0.105f, SDLK_LALT, false, "A"},       // ACT_JUMP    saltar
-    {0.780f, 0.860f, 0.125f, SDLK_LCTRL, false, "B"},      // ACT_FIRE    disparar
-    {0.940f, 0.900f, 0.075f, SDLK_LSHIFT, false, "C"},     // ACT_BLITZ   turbo
-    {0.660f, 0.880f, 0.075f, SDLK_SPACE, false, "P"},      // ACT_POWERLINE
-    {0.830f, 0.660f, 0.070f, SDLK_RCTRL, false, "G"},      // ACT_GRENADE
-    {0.700f, 0.700f, 0.070f, SDLK_RSHIFT, false, "S"},     // ACT_SMARTBOMB
-    {0.640f, 0.790f, 0.070f, SDLK_RETURN, false, "W"},     // ACT_WEAPON
-    {0.045f, 0.055f, 0.055f, SDLK_ESCAPE, false, "II"},    // ACT_ESCAPE  pausa
-    {0.945f, 0.055f, 0.055f, 0, true, "DBG"},              // ACT_DEBUG   panel de trucos
+    // Anclas en la ventana completa (x/y 0..1); los radios usan la altura para conservar
+    // botones circulares. Esto deja el juego 4:3 centrado y fija los controles a los bordes.
+    {0.905f, 0.730f, 0.090f, SDLK_LALT, false},       // ACT_JUMP
+    {0.810f, 0.875f, 0.105f, SDLK_LCTRL, false},      // ACT_FIRE
+    {0.940f, 0.895f, 0.068f, SDLK_LSHIFT, false},     // ACT_BLITZ
+    {0.690f, 0.875f, 0.068f, SDLK_SPACE, false},      // ACT_POWERLINE
+    {0.770f, 0.675f, 0.064f, SDLK_RCTRL, false},      // ACT_GRENADE
+    {0.665f, 0.710f, 0.064f, SDLK_RSHIFT, false},     // ACT_SMARTBOMB
+    {0.680f, 0.795f, 0.064f, SDLK_RETURN, false},     // ACT_WEAPON
+    {0.055f, 0.075f, 0.048f, SDLK_ESCAPE, false},     // ACT_ESCAPE
+    {0.945f, 0.075f, 0.048f, 0, true},                // ACT_DEBUG
 };
 
 constexpr int ACTION_COUNT = sizeof(ACTIONS) / sizeof(ACTIONS[0]);
@@ -89,6 +92,24 @@ constexpr float STICK_RADIUS_FRAC = 0.135f;
 constexpr float STICK_DEADZONE = 0.30f;
 
 bool g_initialised = false;
+std::vector<VERTEX2D> g_stroke_vertices;
+
+void DrawStroke(float x1, float y1, float x2, float y2, float width, std::uint32_t color) {
+    const float dx = x2 - x1;
+    const float dy = y2 - y1;
+    const float length = std::sqrt(dx * dx + dy * dy);
+    if (length < 0.01f)
+        return;
+    const float ox = -dy * width * 0.5f / length;
+    const float oy = dx * width * 0.5f / length;
+    const VERTEX2D quad[4] = {
+        VERTEX2D{x1 + ox, y1 + oy, HCOLOR(color), 0.0f, 0.0f},
+        VERTEX2D{x1 - ox, y1 - oy, HCOLOR(color), 0.0f, 0.0f},
+        VERTEX2D{x2 + ox, y2 + oy, HCOLOR(color), 0.0f, 0.0f},
+        VERTEX2D{x2 - ox, y2 - oy, HCOLOR(color), 0.0f, 0.0f},
+    };
+    g_stroke_vertices.insert(g_stroke_vertices.end(), {quad[0], quad[1], quad[2], quad[2], quad[1], quad[3]});
+}
 
 }  // namespace
 
@@ -101,7 +122,6 @@ void TouchControlsClass::Init() {
         actions[i].r = ACTIONS[i].r;
         actions[i].scancode = ACTIONS[i].toggle ? 0 : static_cast<int>(SDL_GetScancodeFromKey(ACTIONS[i].key));
         actions[i].is_toggle = ACTIONS[i].toggle;
-        actions[i].label = ACTIONS[i].label;
         actions[i].pressed = false;
         actions[i].finger = -1;
     }
@@ -144,8 +164,8 @@ void TouchControlsClass::ResetLayout() {
         actions[i].y = ACTIONS[i].y;
         actions[i].r = ACTIONS[i].r;
     }
-    stick_default_x = 0.17f;
-    stick_default_y = 0.74f;
+    stick_default_x = 0.11f;
+    stick_default_y = 0.76f;
     Protokoll << "Mando virtual: disposicion restablecida" << std::endl;
 }
 
@@ -435,6 +455,8 @@ void TouchControlsClass::DrawGeometry(const SDL_Rect &screen_rect) {
         return;
 
     const float escala = static_cast<float>(screen_rect.h);
+    g_stroke_vertices.clear();
+    g_stroke_vertices.reserve(512);
 
     // --- Joystick -----------------------------------------------------------------------
     {
@@ -446,17 +468,29 @@ void TouchControlsClass::DrawGeometry(const SDL_Rect &screen_rect) {
         const float bx = stick_active ? stick_origin_x : cx;
         const float by = stick_active ? stick_origin_y : cy;
 
-        DrawDisc(bx, by, r, r, COLOR_STICK_BASE);
-        DrawDisc(bx, by, r * 0.42f, r * 0.42f, COLOR_STICK_KNOB);
+        DrawDisc(bx, by, r * 1.08f, r * 1.08f, 0x38202D43);
+        DrawDisc(bx, by, r, r, 0x5549D2C7);
+        DrawDisc(bx, by, r * 0.94f, r * 0.94f, COLOR_STICK_BASE);
+        DrawDisc(bx, by, r * 0.43f, r * 0.43f, 0x7048C9C0);
+        DrawDisc(bx, by, r * 0.34f, r * 0.34f, COLOR_STICK_KNOB);
 
         if (stick_active) {
-            // Pomos desplazado + eje X para que se vea la direccion.
-            const std::uint32_t c = 0x70FFD24A;
-            DrawDisc(bx + stick_x, by + stick_y, r * 0.34f, r * 0.34f, c);
+            // Pomo desplazado y un brillo suave mientras se mueve.
+            DrawDisc(bx + stick_x, by + stick_y, r * 0.39f, r * 0.39f, 0x70D5FFF8);
         } else {
-            // Flechas de referencia: izquierda / derecha.
-            DrawQuad(bx - r * 1.15f, by - r * 0.12f, r * 0.30f, r * 0.24f, 0x28FFFFFF);
-            DrawQuad(bx + r * 0.85f, by - r * 0.12f, r * 0.30f, r * 0.24f, 0x28FFFFFF);
+            // Indicadores direccionales discretos alrededor del joystick.
+            const float s = r * 0.12f;
+            for (int direction = 0; direction < 4; ++direction) {
+                const float angle = direction * 1.5707963f;
+                const float ax = bx + std::cos(angle) * r * 0.70f;
+                const float ay = by + std::sin(angle) * r * 0.70f;
+                const float vx = std::cos(angle) * s;
+                const float vy = std::sin(angle) * s;
+                DrawStroke(ax - vx + vy * 0.75f, ay - vy - vx * 0.75f,
+                           ax + vx, ay + vy, s * 0.30f, 0xB8E8F5F5);
+                DrawStroke(ax - vx - vy * 0.75f, ay - vy + vx * 0.75f,
+                           ax + vx, ay + vy, s * 0.30f, 0xB8E8F5F5);
+            }
         }
     }
 
@@ -466,19 +500,87 @@ void TouchControlsClass::DrawGeometry(const SDL_Rect &screen_rect) {
         const float cy = screen_rect.y + actions[i].y * screen_rect.h;
         const float r = actions[i].r * escala;
 
-        std::uint32_t color;
-        if (actions[i].is_toggle) {
-            color = COLOR_DEBUGBTN;
-        } else {
-            color = actions[i].pressed ? COLOR_PRESSED : COLOR_BASE;
+        const std::uint32_t rim = actions[i].is_toggle ? COLOR_DEBUG_RIM : COLOR_RIM;
+        const std::uint32_t color = actions[i].is_toggle
+                                        ? COLOR_DEBUGBTN
+                                        : (actions[i].pressed ? COLOR_PRESSED : COLOR_BASE);
+
+        // Boton tipo cristal: sombra, aro turquesa fino y superficie oscura de alto contraste.
+        DrawDisc(cx, cy + r * 0.07f, r * 1.10f, r * 1.10f, 0x52000000);
+        DrawDisc(cx, cy, r * 1.04f, r * 1.04f, rim);
+        DrawDisc(cx, cy, r * 0.96f, r * 0.96f, color);
+        DrawDisc(cx, cy - r * 0.18f, r * 0.68f, r * 0.68f,
+                 actions[i].pressed ? 0x243BFFF0 : 0x182BFFF0);
+
+        const float w = std::max(2.0f, r * 0.105f);
+        const std::uint32_t icon = COLOR_ICON;
+        switch (i) {
+            case ACT_JUMP: // flecha arriba
+                DrawStroke(cx, cy + r * 0.34f, cx, cy - r * 0.30f, w, icon);
+                DrawStroke(cx, cy - r * 0.30f, cx - r * 0.28f, cy - r * 0.02f, w, icon);
+                DrawStroke(cx, cy - r * 0.30f, cx + r * 0.28f, cy - r * 0.02f, w, icon);
+                break;
+            case ACT_FIRE: // reticula / disparo
+                DrawDisc(cx, cy, r * 0.38f, r * 0.38f, 0xE0F2FAFF);
+                DrawDisc(cx, cy, r * 0.23f, r * 0.23f, color);
+                DrawDisc(cx, cy, r * 0.095f, r * 0.095f, icon);
+                DrawStroke(cx + r * 0.15f, cy - r * 0.15f, cx + r * 0.46f, cy - r * 0.46f, w, icon);
+                break;
+            case ACT_BLITZ: // rayo
+                DrawStroke(cx + r * 0.08f, cy - r * 0.43f, cx - r * 0.22f, cy + r * 0.02f, w, icon);
+                DrawStroke(cx - r * 0.22f, cy + r * 0.02f, cx + r * 0.04f, cy + r * 0.02f, w, icon);
+                DrawStroke(cx + r * 0.04f, cy + r * 0.02f, cx - r * 0.10f, cy + r * 0.42f, w, icon);
+                break;
+            case ACT_POWERLINE: // pulso de energia
+                DrawStroke(cx - r * 0.40f, cy + r * 0.12f, cx - r * 0.17f, cy + r * 0.12f, w, icon);
+                DrawStroke(cx - r * 0.17f, cy + r * 0.12f, cx - r * 0.02f, cy - r * 0.28f, w, icon);
+                DrawStroke(cx - r * 0.02f, cy - r * 0.28f, cx + r * 0.16f, cy + r * 0.25f, w, icon);
+                DrawStroke(cx + r * 0.16f, cy + r * 0.25f, cx + r * 0.40f, cy - r * 0.10f, w, icon);
+                break;
+            case ACT_GRENADE: // granada con espoleta
+                DrawDisc(cx, cy + r * 0.04f, r * 0.27f, r * 0.31f, icon);
+                DrawDisc(cx, cy + r * 0.04f, r * 0.17f, r * 0.21f, color);
+                DrawStroke(cx - r * 0.10f, cy - r * 0.28f, cx + r * 0.12f, cy - r * 0.38f, w, icon);
+                DrawStroke(cx + r * 0.12f, cy - r * 0.38f, cx + r * 0.30f, cy - r * 0.29f, w, icon);
+                break;
+            case ACT_SMARTBOMB: // explosion
+                DrawDisc(cx, cy, r * 0.18f, r * 0.18f, icon);
+                for (int ray = 0; ray < 8; ++ray) {
+                    const float a = ray * 0.7853982f;
+                    DrawStroke(cx + std::cos(a) * r * 0.29f, cy + std::sin(a) * r * 0.29f,
+                               cx + std::cos(a) * r * 0.44f, cy + std::sin(a) * r * 0.44f, w, icon);
+                }
+                break;
+            case ACT_WEAPON: // arma estilizada
+                DrawStroke(cx - r * 0.40f, cy - r * 0.12f, cx + r * 0.30f, cy - r * 0.12f, w * 1.4f, icon);
+                DrawStroke(cx + r * 0.30f, cy - r * 0.12f, cx + r * 0.42f, cy - r * 0.02f, w, icon);
+                DrawStroke(cx - r * 0.16f, cy - r * 0.10f, cx - r * 0.06f, cy + r * 0.28f, w, icon);
+                DrawStroke(cx - r * 0.06f, cy + r * 0.28f, cx + r * 0.12f, cy + r * 0.28f, w, icon);
+                break;
+            case ACT_ESCAPE: // pausa
+                DrawStroke(cx - r * 0.16f, cy - r * 0.30f, cx - r * 0.16f, cy + r * 0.30f, w * 1.5f, icon);
+                DrawStroke(cx + r * 0.16f, cy - r * 0.30f, cx + r * 0.16f, cy + r * 0.30f, w * 1.5f, icon);
+                break;
+            case ACT_DEBUG: // ajustes / panel
+                DrawDisc(cx, cy, r * 0.13f, r * 0.13f, icon);
+                for (int spoke = 0; spoke < 8; ++spoke) {
+                    const float a = spoke * 0.7853982f;
+                    DrawStroke(cx + std::cos(a) * r * 0.23f, cy + std::sin(a) * r * 0.23f,
+                               cx + std::cos(a) * r * 0.43f, cy + std::sin(a) * r * 0.43f, w, icon);
+                }
+                break;
         }
 
-        // Aro exterior mas transparente: da relieve y marca mejor el area pulsable.
-        DrawDisc(cx, cy, r * 1.10f, r * 1.10f, (color & 0x00FFFFFF) | 0x18000000);
-        DrawDisc(cx, cy, r, r, color);
-
         if (editing)
-            DrawDisc(cx, cy, r * 0.35f, r * 0.35f, COLOR_EDIT);
+            DrawDisc(cx, cy, r * 0.08f, r * 0.08f, COLOR_EDIT);
+    }
+
+    // Trazos de todos los iconos en un unico draw call, importante para no penalizar
+    // los moviles de gama baja con una llamada OpenGL por segmento.
+    if (!g_stroke_vertices.empty()) {
+        DirectGraphics.DrawColorVertices(GL_TRIANGLES,
+                                         static_cast<std::uint32_t>(g_stroke_vertices.size()),
+                                         g_stroke_vertices.data(), DirectGraphics.GetWindowProjection());
     }
 }
 

@@ -108,13 +108,12 @@ class TouchControlsClass {
     };
 
     struct ActionButton {
-        float x, y;          ///< centro, normalizado (0..1) dentro del area de juego
+        float x, y;          ///< centro, normalizado (0..1) respecto a la ventana completa
         float r;             ///< radio, normalizado respecto a la ALTURA de la pantalla
         int scancode;        ///< tecla que se pulsa al tocarlo
         bool is_toggle;      ///< no escribe tecla cada frame, solo avisa al pulsar
         bool pressed;
         int finger;          ///< dedo que lo esta pulsando (-1 = ninguno)
-        const char *label;   ///< texto corto que se dibuja dentro
     };
 
     void ClearKeys();
@@ -161,8 +160,8 @@ class TouchControlsClass {
     std::vector<FingerState> fingers;
 
     /// Posicion por defecto del joystick (centro), normalizada.
-    float stick_default_x = 0.17f;
-    float stick_default_y = 0.74f;
+    float stick_default_x = 0.11f;
+    float stick_default_y = 0.76f;
 };
 
 extern TouchControlsClass TouchControls;

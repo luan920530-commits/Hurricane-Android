@@ -120,8 +120,13 @@ GameStateEnum SpielZustand = GameStateEnum::CRACKTRO;  // Aktueller Zustand des 
 
 void FillCommandLineParams(int argc, char *args[]) {
 
-    // Set some sensible defaults
+    // Set some sensible defaults. En Android llena todo el panel: la salida del FBO se
+    // adapta al ancho y alto reales de la ventana cada vez que cambia la pantalla.
+#if defined(ANDROID)
+    CommandLineParams.RunWindowMode = ScreenMode::FULLSCREEN_STRETCHED;
+#else
     CommandLineParams.RunWindowMode = ScreenMode::FULLSCREEN;
+#endif
     CommandLineParams.Scanlines = false;
     CommandLineParams.ColorBleed = false;
     CommandLineParams.ScreenCurvature = false;
@@ -542,7 +547,9 @@ int main(int argc, char *argv[]) {
                         // Panel cerrado: un toque en el boton DBG lo abre.
                         const float px = event.tfinger.x * static_cast<float>(DirectGraphics.GetWindowWidth());
                         const float py = event.tfinger.y * static_cast<float>(DirectGraphics.GetWindowHeight());
-                        if (TouchControls.HitDebugButton(px, py, DirectGraphics.GetRenderRect()))
+                        const SDL_Rect touch_area{0, 0, DirectGraphics.GetWindowWidth(),
+                                                  DirectGraphics.GetWindowHeight()};
+                        if (TouchControls.HitDebugButton(px, py, touch_area))
                             DebugPanel.SetOpen(true);
                     }
                     break;

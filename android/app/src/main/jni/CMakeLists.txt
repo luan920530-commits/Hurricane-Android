@@ -138,8 +138,9 @@ target_include_directories(main PRIVATE
 #   USE_GL2      -> programmable pipeline renderer
 #   USE_GLES2    -> OpenGL ES 2.0 flavour of that renderer (the only GL ES level Android
 #                   guarantees, works everywhere from Android 4.3 to current)
-#   USE_FBO      -> render to a 640x480 texture and scale it to the screen with correct
-#                   aspect ratio; this is what makes phones with odd resolutions look right
+#   USE_FBO      -> render to a 640x480 texture, then scale it to the current display size.
+#                   Android defaults to full-screen fill and recomputes the output rectangle
+#                   when the window changes size.
 #   USE_FAST_RNG / USE_FAST_TRIG -> cheaper math, helps on low end ARM devices
 #
 # USE_ETC1 (texturas comprimidas) esta desactivado a proposito: los .pkm ocupan mas que los
