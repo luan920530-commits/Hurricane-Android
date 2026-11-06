@@ -158,6 +158,20 @@ jobs:
             echo "::group::Ultimas 200 lineas de la compilacion"
             tail -n 200 "$RUNNER_TEMP/gradle.log"
             echo "::endgroup::"
+
+            # Las anotaciones viajan con la ejecucion y se pueden consultar por API, mientras
+            # que el log completo requiere otro host. Volcarlas aqui hace que el motivo del
+            # fallo este disponible desde cualquier sitio.
+            echo "::group::Errores detectados"
+            grep -nE "^(FAILURE|\* What went wrong|Execution failed|> |Caused by|e: )|error:" "$RUNNER_TEMP/gradle.log" \
+              | head -n 12 \
+              | while IFS= read -r line; do
+                  safe=$(printf '%s' "$line" | tr -d '\r' | cut -c1-900)
+                  echo "::error title=Gradle::${safe}"
+                  echo "$safe"
+                done
+            echo "::endgroup::"
+
             echo "::error::Gradle fallo con codigo $status"
             exit "$status"
           fi
