@@ -1,0 +1,188 @@
+// ---------------------------------------------------------------------------------------
+// Hurrican para Android
+//
+// El modulo compila:
+//   - Java: la actividad de SDL (copiada de SDL 2.32, sin cambios) + HurricanActivity.
+//   - Nativo: libSDL2 / libSDL2_image (shared) y libmain.so con el motor del juego,
+//     SDL2_mixer y libxmp enlazados estaticamente.
+//
+// Todo el nativo se construye con CMake a traves del NDK que trae Android Studio; no hace
+// falta instalar dependencias del sistema.
+// ---------------------------------------------------------------------------------------
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'org.hurrican.game'
+    compileSdk 34
+
+    // Version explicita del NDK: evita que cada maquina (o cada runner de CI) use una
+    // distinta y que la compilacion cambie de comportamiento sin tocar el codigo.
+    ndkVersion "26.1.10909125"
+
+    /*
+     * Los datos del juego viven en Hurrican/ (una sola copia, la misma que usa la version de
+     * escritorio). AGP los necesita en app/src/main/assets, asi que se preparan con una tarea
+     * de Gradle antes del empaquetado.
+     *
+     * No se hace en CMake a proposito: AGP empaqueta los assets ANTES de compilar el codigo
+     * nativo, asi que un paso dentro de CMake llegaria tarde y la primera compilacion
+     * generaria un APK sin datos del juego.
+     */
+    sourceSets {
+        main {
+            // .get() convierte el Provider en File: srcDirs necesita rutas, no Providers.
+            assets.srcDirs += layout.buildDirectory.dir("generated/assets/hurrican").get().asFile
+        }
+    }
+
+    defaultConfig {
+        applicationId "org.hurrican.game"
+        minSdk 21          // API 21: OpenGL ES 2 + AAudio/OpenSL disponibles en todo el parque
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+
+        externalNativeBuild {
+            cmake {
+                /*
+                 * ABI por defecto: ARM (moviles reales) + x86_64 (emulador).
+                 * La lista se puede sobreescribir desde la linea de comandos o desde CI con
+                 *   ./gradlew assembleDebug -Pabi=arm64-v8a
+                 * que es lo que usa el workflow de GitHub Actions para no compilar de mas.
+                 */
+                def abiList = providers.gradleProperty("abi").getOrElse("arm64-v8a,armeabi-v7a,x86_64")
+                abiFilters(*abiList.split(",").collect { it.trim() })
+
+                /*
+                 * No se fija CMAKE_BUILD_TYPE: lo decide AGP segun el tipo de compilacion y
+                 * el ABI (le pasa su propia cadena de herramientas). Forzarlo aqui hacia que
+                 * el APK de debug compilase en Release y que Gradle avisase por conflicto.
+                 */
+                arguments "-DANDROID_STL=c++_shared"
+                cppFlags "-std=c++17", "-fexceptions", "-frtti"
+            }
+        }
+
+        // Sin simbolos de depuracion en el APK: el binario baja de ~30 MB a ~8 MB por ABI
+        // y para depurar ya estan los mensajes de logcat.
+        ndk {
+            debugSymbolLevel 'none'
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path "src/main/jni/CMakeLists.txt"
+            version "3.22.1"
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            shrinkResources false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // Firma de depuracion: permite instalar el APK de release sin configurar claves.
+            // Para publicar en una tienda, cambia esto por tu propio keystore.
+            signingConfig signingConfigs.debug
+        }
+        debug {
+            debuggable true
+            jniDebuggable true
+        }
+    }
+
+    // Los .pkm (texturas ETC1, opcionales) ya estan comprimidos: no tiene sentido
+    // volver a comprimirlos. El resto de assets se deja con la compresion por defecto de
+    // AAPT2 para que el APK pese menos.
+    androidResources {
+        noCompress 'pkm'
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    lint {
+        abortOnError false
+    }
+}
+
+dependencies {
+    // Sin dependencias externas: SDL y el juego van dentro del binario nativo.
+}
+
+// ---------------------------------------------------------------------------------------
+// Preparacion de los assets del juego
+//
+// Copia incremental (solo lo que cambia) de Hurrican/data y Hurrican/lang al directorio de
+// assets generado. Se engancha a preBuild y a mergeAssets para que exista siempre antes de
+// construir el APK, tanto en Android Studio como en ./gradlew y en CI.
+// ---------------------------------------------------------------------------------------
+def hurricanData = rootProject.file("../Hurrican")
+
+tasks.register("copyHurricanAssets", Copy) {
+    description = "Copia los datos del juego (Hurrican/data y Hurrican/lang) a los assets"
+    group = "hurrican"
+
+    // Sin datos del juego el APK se generaria pero se cerraria al arrancar, asi que es mejor
+    // fallar aqui con un mensaje claro que dejar un APK roto.
+    doFirst {
+        if (!hurricanData.isDirectory()) {
+            throw new GradleException(
+                "No se encuentra la carpeta de datos del juego en '${hurricanData}'.\n" +
+                "El proyecto Android espera el arbol de Hurrican (src/, data/, lang/) junto a la " +
+                "carpeta android/ en la raiz del repositorio.")
+        }
+    }
+
+    from(hurricanData) {
+        include "data/**"
+        include "lang/**"
+    }
+    into layout.buildDirectory.dir("generated/assets/hurrican")
+
+    // Indice de ficheros que el codigo nativo usa para copiar los datos del APK a su
+    // almacenamiento interno (ver Hurrican/src/SDLPort/AndroidPort.cpp).
+    //
+    // Hace falta porque el NDK no puede recorrer directorios dentro del APK:
+    // AAssetDir_getNextFileName() solo devuelve los ficheros de un directorio, nunca los
+    // subdirectorios, asi que sin indice no hay forma de saber que existe
+    // data/textures/ o data/music/.
+    //
+    // Formato: "<tamano en bytes> <ruta relativa>", una linea por fichero. Las rutas son las
+    // mismas que las de assets/, o sea que empiezan por data/ o lang/.
+    doLast {
+        def destino = layout.buildDirectory.dir("generated/assets/hurrican").get().asFile
+        def indice = new File(destino, "hurrican_index.txt")
+        def lineas = new StringBuilder()
+        int n = 0
+        destino.eachFileRecurse { f ->
+            if (f.isFile() && f.name != "hurrican_index.txt") {
+                def relativa = destino.toPath().relativize(f.toPath()).toString().replace("\\", "/")
+                lineas.append(f.length()).append(" ").append(relativa).append("\n")
+                n++
+            }
+        }
+        if (n == 0) {
+            throw new GradleException("No hay datos del juego que empaquetar en ${destino}")
+        }
+        indice.text = lineas.toString()
+        logger.lifecycle("Indice de assets: ${n} ficheros -> ${indice}")
+    }
+}
+
+tasks.configureEach { task ->
+    if (task.name == "preBuild" || task.name.startsWith("merge") && task.name.endsWith("Assets")) {
+        task.dependsOn("copyHurricanAssets")
+    }
+}
