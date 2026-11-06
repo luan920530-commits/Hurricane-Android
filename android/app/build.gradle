@@ -150,6 +150,35 @@ tasks.register("copyHurricanAssets", Copy) {
         include "lang/**"
     }
     into layout.buildDirectory.dir("generated/assets/hurrican")
+
+    // Indice de ficheros que el codigo nativo usa para copiar los datos del APK a su
+    // almacenamiento interno (ver Hurrican/src/SDLPort/AndroidPort.cpp).
+    //
+    // Hace falta porque el NDK no puede recorrer directorios dentro del APK:
+    // AAssetDir_getNextFileName() solo devuelve los ficheros de un directorio, nunca los
+    // subdirectorios, asi que sin indice no hay forma de saber que existe
+    // data/textures/ o data/music/.
+    //
+    // Formato: "<tamano en bytes> <ruta relativa>", una linea por fichero. Las rutas son las
+    // mismas que las de assets/, o sea que empiezan por data/ o lang/.
+    doLast {
+        def destino = layout.buildDirectory.dir("generated/assets/hurrican").get().asFile
+        def indice = new File(destino, "hurrican_index.txt")
+        def lineas = new StringBuilder()
+        int n = 0
+        destino.eachFileRecurse { f ->
+            if (f.isFile() && f.name != "hurrican_index.txt") {
+                def relativa = destino.toPath().relativize(f.toPath()).toString().replace("\\", "/")
+                lineas.append(f.length()).append(" ").append(relativa).append("\n")
+                n++
+            }
+        }
+        if (n == 0) {
+            throw new GradleException("No hay datos del juego que empaquetar en ${destino}")
+        }
+        indice.text = lineas.toString()
+        logger.lifecycle("Indice de assets: ${n} ficheros -> ${indice}")
+    }
 }
 
 tasks.configureEach { task ->

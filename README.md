@@ -23,12 +23,15 @@ móvil moderno.
 | Empaquetado del APK (Gradle + manifiesto + icono) | lista |
 
 **La APK se compila en GitHub Actions**, sin instalar nada en tu ordenador: pestaña
-**Actions → Build APK → Run workflow**, y al terminar se descarga desde *Artifacts*.
+**Actions → Build APK → Run workflow**, y al terminar se descarga desde *Artifacts*. El
+workflow compila el motor y las dependencias con el NDK, comprueba que la APK lleva dentro
+los datos del juego (más de 600 ficheros y 60 MB de assets) y la publica como artefacto.
 
-**Sin verificar en un dispositivo real**: en este entorno no hay SDK de Android ni NDK, así
-que no se ha podido generar ni ejecutar la APK. Todos los ficheros modificados se han
-verificado con un compilador de C++ de escritorio usando cabeceras de OpenGL ES simuladas
-(0 errores en los 186 `.cpp` del motor), pero la prueba final tiene que hacerse en un móvil.
+**Sin verificar en un dispositivo real**: la compilación está verificada de principio a fin
+en los servidores de GitHub (JDK 17 + NDK 26 + CMake 3.22, las dos ABI), pero no se ha
+ejecutado en un móvil, así que el aspecto del mando táctil, los tiempos de carga y el
+rendimiento están sin ajustar. Para diagnosticar, el juego escribe en `logcat` con la
+etiqueta `Hurrican` y en `files/save/Game_Log.txt`.
 
 ---
 
@@ -99,8 +102,10 @@ android/
   app/src/main/
     jni/
       CMakeLists.txt          punto de entrada nativo
-      copy_assets.cmake       copia Hurrican/{data,lang} a los assets del APK
-      SDL/ SDL_image/ SDL_mixer/ libxmp/    dependencias empaquetadas
+      SDL/ SDL_image/ SDL_mixer/            dependencias empaquetadas
+      SDL_mixer/external/libxmp/             reproductor de música .it
+  app/build.gradle            empaqueta Hurrican/{data,lang} como assets y genera
+                              hurrican_index.txt (lista de lo empaquetado)
     java/org/libsdl/app/      Java de SDL (sin tocar)
     java/org/hurrican/game/   HurricanActivity
     res/                      icono, tema, textos
@@ -114,7 +119,13 @@ Todo se compila dentro del APK: no hace falta instalar nada en el sistema.
 
 El APK no puede leer sus propios assets con rutas normales, y el motor lee cientos de
 ficheros con `std::ifstream`. La primera vez que se abre el juego se copian los assets
-(~91 MB) al almacenamiento interno de la aplicación:
+(~91 MB) al almacenamiento interno de la aplicación.
+
+La copia sigue `assets/hurrican_index.txt`, un índice que genera Gradle al empaquetar: el
+NDK solo deja listar los **ficheros** de un directorio de assets, nunca los subdirectorios,
+así que sin índice no habría manera de saber que existen `data/textures/` o `data/music/`.
+Si algún día cambian los datos, sube `ANDROID_ASSET_VERSION` en
+`Hurrican/src/SDLPort/AndroidPort.cpp` para forzar la recopia.
 
 ```
 /data/data/org.hurrican.game/files/data   texturas, niveles, música, sonidos, shaders
