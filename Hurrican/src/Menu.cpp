@@ -13,7 +13,10 @@
 // Include Dateien
 // --------------------------------------------------------------------------------------
 
-#if !defined(__AROS__) && !defined(__MORPHOS__) && !defined(__amigaos4__)
+// sys/timeb.h no existe en bionic (la libc de Android), y este fichero no usa ftime() ni
+// struct timeb para nada: la cabecera venia heredada de la version MS-DOS. Se mantiene en
+// las plataformas de escritorio donde si existe.
+#if !defined(__AROS__) && !defined(__MORPHOS__) && !defined(__amigaos4__) && !defined(ANDROID)
 #include <sys/timeb.h>
 #endif
 #include <stdio.h>
