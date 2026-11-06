@@ -143,6 +143,11 @@ jobs:
           BUILD_TYPE: ${{ github.event.inputs.build_type || 'debug' }}
         run: |
           set +e
+          echo "Espacio en disco, CPUs y memoria disponibles antes de compilar:"
+          df -h . | tail -n 2 || true
+          nproc || true
+          free -m | head -n 2 || true
+
           # La ABI se pasa como propiedad de Gradle (-Pabi=...) y app/build.gradle la usa si
           # esta definida; si no, se queda con la lista por defecto.
           #
@@ -159,30 +164,12 @@ jobs:
             tail -n 200 "$RUNNER_TEMP/gradle.log"
             echo "::endgroup::"
 
-            # Las anotaciones viajan con la ejecucion y se pueden consultar por API, mientras
-            # que el log completo requiere otro host. Volcarlas aqui hace que el motivo del
-            # fallo este disponible desde cualquier sitio.
-            #
-            # Importante: las lineas interesantes son las ULTIMAS del log (Gradle escribe
-            # "FAILURE: Build failed with an exception." al final). Buscar en todo el fichero
-            # solo devuelve las primeras tareas ejecutadas, que no dicen nada.
-            echo "::group::Errores detectados"
-            last_note() {
-              safe=$(printf '%s' "$1" | tr -d '\r' | tr -s ' ' | cut -c1-900)
-              [ -n "$safe" ] || return 0
-              echo "::error title=$2::${safe}"
-              echo "$safe"
-            }
-            # GitHub limita a 10 las anotaciones de error por paso: se emiten las 6 del
-            # bloque de error y las 4 ultimas lineas del log, nada mas.
-            # 1) El bloque de error propiamente dicho, si aparece.
-            grep -A 6 -E "^FAILURE: Build failed|^\* What went wrong" "$RUNNER_TEMP/gradle.log" \
-              | tail -n 6 | while IFS= read -r l; do last_note "$l" "Gradle"; done
-            # 2) Y siempre, las ultimas lineas del log: ahi esta el mensaje del compilador o
-            #    del enlazador cuando Gradle se calla.
-            tail -n 120 "$RUNNER_TEMP/gradle.log" | grep -v '^[[:space:]]*$' | tail -n 4 \
-              | while IFS= read -r l; do last_note "$l" "Gradle (final)"; done
-            echo "::endgroup::"
+            # El log completo no es accesible desde fuera (vive en un almacenamiento que no
+            # siempre responde) y las anotaciones son lo unico que viaja con la ejecucion y
+            # se puede consultar por API. El script recorta el log alrededor de los errores
+            # reales y los publica como anotaciones troceadas.
+            python3 "$GITHUB_WORKSPACE/.github/scripts/annotate_log.py" \
+              "$RUNNER_TEMP/gradle.log" --title "Gradle" || true
 
             echo "::error::Gradle fallo con codigo $status"
             exit "$status"
