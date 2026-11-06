@@ -135,6 +135,7 @@ class DirectGraphicsClass {
     // frame, asi que necesita proyectar con la matriz de pantalla y usar solo color.
     inline const glm::mat4x4 &GetWindowProjection() const { return matProjWindow; }
     inline const SDL_Rect &GetRenderRect() const { return RenderRect; }
+    inline SDL_Rect GetOverlayRect() const { return SDL_Rect{0, 0, WindowView.w, WindowView.h}; }
     inline int GetWindowWidth() const { return WindowView.w; }
     inline int GetWindowHeight() const { return WindowView.h; }
     void DrawColorVertices(GLenum primitive_type, std::uint32_t primitive_count,

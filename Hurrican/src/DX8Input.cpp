@@ -199,7 +199,16 @@ bool DirectInputClass::UpdateTastatur() {
             std::copy_n(sdl_state, std::min(count, MAX_KEYS), TouchKeyboard);
         TastaturPuffer = TouchKeyboard;
     }
-    TouchControls.Update(DirectGraphics.GetRenderRect(), DirectGraphics.GetWindowWidth(),
+    // Algunos menus esperan a que se suelte una tecla en un bucle interno sin PollEvent.
+    // Consumir tambien aqui los eventos tactiles evita que esos bucles se queden bloqueados.
+    SDL_Event touch_events[32];
+    int count;
+    while ((count = SDL_PeepEvents(touch_events, 32, SDL_GETEVENT, SDL_FINGERDOWN, SDL_FINGERMOTION)) > 0) {
+        for (int i = 0; i < count; ++i)
+            TouchControls.HandleFingerEvent(touch_events[i].tfinger, DirectGraphics.GetOverlayRect(),
+                                            DirectGraphics.GetWindowWidth(), DirectGraphics.GetWindowHeight());
+    }
+    TouchControls.Update(DirectGraphics.GetOverlayRect(), DirectGraphics.GetWindowWidth(),
                          DirectGraphics.GetWindowHeight());
 #endif
     return true;

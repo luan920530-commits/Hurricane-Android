@@ -497,7 +497,7 @@ int main(int argc, char *argv[]) {
                 case SDL_APP_WILLENTERBACKGROUND:
                     Protokoll << "Android: la app pasa a segundo plano, en pausa" << std::endl;
                     GamePaused = true;
-                    TouchControls.CancelTouches();
+                    TouchControls.ResetTouches();
                     SoundManager.PauseSongs();
                     SoundManager.PauseSounds();
                     break;
@@ -528,22 +528,8 @@ int main(int argc, char *argv[]) {
                 case SDL_FINGERDOWN:
                 case SDL_FINGERMOTION:
                 case SDL_FINGERUP: {
-                    const SDL_Rect &area = DirectGraphics.GetRenderRect();
-                    const int w = DirectGraphics.GetWindowWidth(), h = DirectGraphics.GetWindowHeight();
-                    if (DebugPanel.IsOpen()) {
-                        if (event.type == SDL_FINGERDOWN && area.w > 0 && area.h > 0) {
-                            const float nx = (event.tfinger.x * w - area.x) / area.w;
-                            const float ny = (event.tfinger.y * h - area.y) / area.h;
-                            DebugPanel.HandleTouch(nx, ny, true, area);
-                            TouchControls.CancelTouches();
-                        }
-                    } else if (event.type == SDL_FINGERDOWN &&
-                               TouchControls.HitDebugButton(event.tfinger.x * w, event.tfinger.y * h, area)) {
-                        TouchControls.CancelTouches();
-                        DebugPanel.SetOpen(true);
-                    } else {
-                        TouchControls.HandleFingerEvent(event.tfinger, area, w, h);
-                    }
+                    TouchControls.HandleFingerEvent(event.tfinger, DirectGraphics.GetOverlayRect(),
+                                                    DirectGraphics.GetWindowWidth(), DirectGraphics.GetWindowHeight());
                     break;
                 }
                 case SDL_WINDOWEVENT:

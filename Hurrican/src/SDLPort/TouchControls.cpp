@@ -89,6 +89,7 @@ void TouchControlsClass::Init() {
 
     active = available && enabled;
     wait_for_release = false;
+    contacts.clear();
     g_initialised = true;
     editing = false;
     stick_active = false;
@@ -142,7 +143,10 @@ void TouchControlsClass::ClearKeys() {
     dragging = false;
 }
 
-void TouchControlsClass::CancelTouches() { ClearKeys(); wait_for_release = true; }
+void TouchControlsClass::CancelTouches() { ClearKeys(); wait_for_release = !contacts.empty(); }
+void TouchControlsClass::ResetTouches() {
+    ClearKeys(); contacts.clear(); wait_for_release = false;
+}
 
 bool TouchControlsClass::PlayerAction(int action) const {
     if (!active || editing || DebugPanel.IsOpen()) return false;
@@ -224,6 +228,42 @@ void TouchControlsClass::HandleFingerEvent(const SDL_TouchFingerEvent &finger, c
                                            int win_w, int win_h) {
     if (!g_initialised || !active || area.w <= 0 || area.h <= 0 || win_w <= 0 || win_h <= 0)
         return;
+    static bool logged_first_touch = false;
+    if (!logged_first_touch && finger.type == SDL_FINGERDOWN) {
+        logged_first_touch = true;
+        Protokoll << "Android: primer toque recibido; ventana " << win_w << "x" << win_h
+                  << ", posicion normalizada " << finger.x << "," << finger.y << std::endl;
+    }
+    // SDL Android recibe los toques en el hilo Java. Guardar los eventos consumidos en
+    // el hilo del juego evita leer simultaneamente la lista interna mutable de SDL.
+    auto it = std::find_if(contacts.begin(), contacts.end(), [&](const TouchInput::Finger &f) {
+        return f.device == finger.touchId && f.id == finger.fingerId;
+    });
+    if (finger.type == SDL_FINGERUP) {
+        if (it != contacts.end()) contacts.erase(it);
+    } else if (finger.type == SDL_FINGERDOWN || finger.type == SDL_FINGERMOTION) {
+        if (it == contacts.end()) contacts.push_back({finger.touchId, finger.fingerId, finger.x, finger.y, finger.x, finger.y});
+        else { it->x = finger.x; it->y = finger.y; }
+    }
+
+    if (DebugPanel.IsOpen()) {
+        if (finger.type == SDL_FINGERDOWN) {
+            const float nx = (finger.x * win_w - area.x) / area.w;
+            const float ny = (finger.y * win_h - area.y) / area.h;
+            DebugPanel.HandleTouch(nx, ny, true, area);
+            CancelTouches();
+        }
+        return;
+    }
+    if (wait_for_release) {
+        if (contacts.empty()) wait_for_release = false;
+        return;
+    }
+    if (finger.type == SDL_FINGERDOWN && HitDebugButton(finger.x * win_w, finger.y * win_h, area)) {
+        CancelTouches();
+        DebugPanel.SetOpen(true);
+        return;
+    }
     if (editing) {
         UpdateEditing(finger, area, win_w, win_h);
         return;
@@ -253,19 +293,12 @@ void TouchControlsClass::Update(const SDL_Rect &area, int win_w, int win_h) {
     for (const auto &action : actions)
         buttons.push_back({area.x + action.x * area.w, area.y + action.y * area.h, action.r * area.h});
 
-    std::vector<TouchInput::Finger> fingers;
-    // El identificador cero es valido, y puede haber mas de un dispositivo de entrada.
-    for (int d = 0; d < SDL_GetNumTouchDevices(); ++d) {
-        const SDL_TouchID device = SDL_GetTouchDevice(d);
-        for (int i = 0; i < SDL_GetNumTouchFingers(device); ++i) {
-            const SDL_Finger *f = SDL_GetTouchFinger(device, i);
-            if (f) fingers.push_back({device, f->id, f->x * win_w, f->y * win_h});
-        }
-    }
-    if (wait_for_release) {
-        for (bool &p : pending) p = false;
-        if (!fingers.empty()) return;
-        wait_for_release = false;
+    if (wait_for_release && contacts.empty()) wait_for_release = false;
+    if (wait_for_release) return;
+    std::vector<TouchInput::Finger> fingers = contacts;
+    for (auto &finger : fingers) {
+        finger.x *= win_w; finger.y *= win_h;
+        finger.start_x *= win_w; finger.start_y *= win_h;
     }
     const TouchInput::Rect rect{static_cast<float>(area.x), static_cast<float>(area.y),
                                 static_cast<float>(area.w), static_cast<float>(area.h)};

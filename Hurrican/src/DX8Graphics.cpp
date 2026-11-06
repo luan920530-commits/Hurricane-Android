@@ -15,6 +15,7 @@
 // --------------------------------------------------------------------------------------
 
 #include "DX8Graphics.hpp"
+#include "SDLPort/ScreenLayout.hpp"
 #if defined(ANDROID)
 #  include "SDLPort/DebugPanel.hpp"
 #endif
@@ -76,7 +77,12 @@ DirectGraphicsClass::~DirectGraphicsClass() {}
 // D3D Initialisieren
 // --------------------------------------------------------------------------------------
 bool DirectGraphicsClass::Init(std::uint32_t dwBreite, std::uint32_t dwHoehe, std::uint32_t dwZ_Bits, bool VSync) {
+#if defined(ANDROID)
+    // La actividad usa la superficie disponible completa, incluso con un config antiguo.
+    bool const isFullscreen = true;
+#else
     bool const isFullscreen = CommandLineParams.RunWindowMode != ScreenMode::WINDOW;
+#endif
     int ScreenWidth = SCREENWIDTH;
     int ScreenHeight = SCREENHEIGHT;
 
@@ -178,7 +184,7 @@ bool DirectGraphicsClass::Init(std::uint32_t dwBreite, std::uint32_t dwHoehe, st
      * En Android el tamano de la ventana lo pone el sistema (SDL_WINDOW_FULLSCREEN_DESKTOP),
      * pero se sigue pasando 640x480 como tamano logico: el juego renderiza siempre a
      * RENDERWIDTH x RENDERHEIGHT en el FBO y luego se escala al panel, asi que en pantallas
-     * 18:9 o 20:9 se veran bandas negras laterales en lugar de un juego deformado.
+     * 18:9 o 20:9 el juego mantiene su proporcion y el mando utiliza los laterales.
      */
     Window = SDL_CreateWindow("Hurrican", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, ScreenWidth,
                               ScreenHeight, flags);
@@ -883,6 +889,18 @@ void DirectGraphicsClass::ShowBackBuffer() {
 
         SelectBuffer(false);
 
+#if defined(ANDROID)
+        // Fondo a pantalla completa detras de la imagen 4:3, sin recortar ni deformar
+        // el juego. Los laterales se aprovechan para el mando tactil.
+        SetColorKeyMode();
+        VERTEX2D background[4] = {
+            VERTEX2D{0.0f, 0.0f, HCOLOR(0xFF182C48), 0, 0},
+            VERTEX2D{0.0f, static_cast<float>(WindowView.h), HCOLOR(0xFF080F20), 0, 0},
+            VERTEX2D{static_cast<float>(WindowView.w), 0.0f, HCOLOR(0xFF182C48), 0, 0},
+            VERTEX2D{static_cast<float>(WindowView.w), static_cast<float>(WindowView.h), HCOLOR(0xFF080F20), 0, 0},
+        };
+        DrawColorVertices(GL_TRIANGLE_STRIP, 4, background, matProjWindow);
+#endif
         use_shader = CrtEnabled ? shader_t::RENDER : shader_t::TEXTURE;
         RenderBuffer.BindTexture(true);
 
@@ -905,7 +923,7 @@ void DirectGraphicsClass::ShowBackBuffer() {
 #  if defined(ANDROID)
         // El mando virtual y el panel de trucos se pintan sobre el frame ya escalado.
         DrawTouchControls();
-        DebugPanel.Draw(RenderRect);
+        DebugPanel.Draw(GetOverlayRect());
 #  endif
         SDL_GL_SwapWindow(Window);
 #else  // SDL1.2:
@@ -959,7 +977,12 @@ void DirectGraphicsClass::SetupFramebuffers() {
         Protokoll << "Render viewport resolution: " << RenderView.w << "x" << RenderView.h << " at " << RenderView.x
                   << "x" << RenderView.y << std::endl;
 
-        if (CommandLineParams.RunWindowMode == ScreenMode::FULLSCREEN_STRETCHED) {
+#if defined(ANDROID)
+        const bool stretch = false; // Mantener el juego entero y sin deformar.
+#else
+        const bool stretch = CommandLineParams.RunWindowMode == ScreenMode::FULLSCREEN_STRETCHED;
+#endif
+        if (stretch) {
             /* Fill the whole screen area */
             RenderRect.w = WindowView.w;
             RenderRect.h = WindowView.h;
@@ -967,16 +990,8 @@ void DirectGraphicsClass::SetupFramebuffers() {
             RenderRect.y = 0;
         } else {
             /* Select the best 4:3 resolution */
-            if (WindowView.w < WindowView.h) {
-                RenderRect.w = WindowView.w;
-                RenderRect.h = (WindowView.w / 4) * 3;
-            } else {
-                RenderRect.w = (WindowView.h / 3) * 4;
-                RenderRect.h = WindowView.h;
-            }
-
-            RenderRect.x = std::max(0, WindowView.w - RenderRect.w) / 2;
-            RenderRect.y = std::max(0, WindowView.h - RenderRect.h) / 2;
+            const ScreenLayout::Rect fitted = ScreenLayout::FitGame(WindowView.w, WindowView.h);
+            RenderRect = SDL_Rect{fitted.x, fitted.y, fitted.w, fitted.h};
         }
 
         Protokoll << "Render area: " << RenderRect.w << "x" << RenderRect.h << " at " << RenderRect.x << "x"
@@ -1078,7 +1093,7 @@ void DirectGraphicsClass::DrawTouchControls() {
     const glm::mat4x4 saved_model_view = g_matModelView;
     g_matModelView = glm::mat4x4(1.0f);
 
-    TouchControls.DrawGeometry(RenderRect);
+    TouchControls.DrawGeometry(GetOverlayRect());
 
     g_matModelView = saved_model_view;
 }

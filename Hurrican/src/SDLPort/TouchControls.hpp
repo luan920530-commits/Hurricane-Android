@@ -24,6 +24,7 @@ class TouchControlsClass {
     void DrawLabel(const char *text, float cx, float cy, float max_width, float height);
     void HandleFingerEvent(const SDL_TouchFingerEvent &finger, const SDL_Rect &screen_rect, int win_w, int win_h);
     void CancelTouches();
+    void ResetTouches();
     bool PlayerAction(int action) const;
 
     /** true si el dispositivo tiene pantalla tactil y el jugador no lo desactivo. */
@@ -86,6 +87,7 @@ class TouchControlsClass {
     bool active = false;     ///< available && enabled
     bool editing = false;    ///< modo edicion (arrastrar controles)
     bool wait_for_release = false;
+    std::vector<TouchInput::Finger> contacts; // SDL events; normalized to the surface
 
     /// Joystick flotante de movimiento.
     bool stick_active = false;

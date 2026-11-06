@@ -8,7 +8,7 @@
 #include <vector>
 
 namespace TouchInput {
-struct Finger { std::int64_t device, id; float x, y; };
+struct Finger { std::int64_t device, id; float x, y, start_x, start_y; };
 struct Button { float x, y, radius; };
 struct Rect { float x, y, w, h; };
 
@@ -29,18 +29,18 @@ public:
             for (const auto &finger : fingers) {
                 bool on_button = false;
                 for (const auto &button : buttons) {
-                    const float dx = finger.x - button.x, dy = finger.y - button.y;
+                    const float dx = finger.start_x - button.x, dy = finger.start_y - button.y;
                     if (dx * dx + dy * dy <= button.radius * button.radius) { on_button = true; break; }
                 }
                 if (on_button) continue;
-                const float nx = (finger.x - area.x) / area.w;
-                const float ny = (finger.y - area.y) / area.h;
+                const float nx = (finger.start_x - area.x) / area.w;
+                const float ny = (finger.start_y - area.y) / area.h;
                 const float cx = area.x + default_x * area.w, cy = area.y + default_y * area.h;
-                const bool on_stick = std::hypot(finger.x - cx, finger.y - cy) < radius * 1.2f;
+                const bool on_stick = std::hypot(finger.start_x - cx, finger.start_y - cy) < radius * 1.2f;
                 if ((nx >= 0 && nx < 0.42f && ny >= 0.25f && ny <= 1.0f) || on_stick) {
                     active = true; device = finger.device; id = finger.id; owner = &finger;
-                    origin_x = on_stick ? cx : finger.x;
-                    origin_y = on_stick ? cy : finger.y;
+                    origin_x = on_stick ? cx : finger.start_x;
+                    origin_y = on_stick ? cy : finger.start_y;
                     break;
                 }
             }

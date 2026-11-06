@@ -158,7 +158,9 @@ ni interferir con un teclado o mando físico. En los menús, el joystick desplaz
 | DBG | panel de trucos y edición |
 
 El joystick aparece donde se toca en la zona izquierda inferior. Es posible mover, disparar y
-saltar simultáneamente. Los botones se ajustan al área del juego, incluso con bandas laterales.
+saltar simultáneamente. Los controles se distribuyen sobre toda la pantalla; el juego conserva
+su formato 4:3 y los laterales se rellenan con un fondo, sin estirar ni recortar la partida.
+La versión de esta revisión se identifica en Android como `1.1-touch` (código 2).
 
 Para cambiar su posición, abre **DBG**, activa **EDITAR**, cierra el panel y arrastra los
 controles. Abre **DBG** de nuevo y desactiva **EDITAR** para jugar. La posición se conserva
