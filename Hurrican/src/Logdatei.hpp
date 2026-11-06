@@ -14,7 +14,7 @@
 
 class Logdatei : public std::ostringstream {
   private:
-    const std::string filename_;  ///< Name of the logfile
+    std::string filename_;  ///< Name of the logfile (se actualiza al reabrir)
     std::ofstream file;           ///< Filestream of the logfile
     // FIXME: This doesn't work currently. It's not a nice solution, anyway.
     bool delLogFile;  // Logfile am Ende löschen, wenn kein Fehler auftrat
@@ -22,6 +22,9 @@ class Logdatei : public std::ostringstream {
   public:
     Logdatei(const std::string &filename);
     virtual ~Logdatei();
+
+    /// Reabre el log en otra ruta (Android: cuando ya se conoce files/save).
+    bool openFile(const std::string &path);
 
     void flush();
 

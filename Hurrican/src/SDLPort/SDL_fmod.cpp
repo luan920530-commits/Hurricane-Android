@@ -23,6 +23,7 @@
  */
 
 #include "SDL_fmod.hpp"
+
 #include <cstring>
 #include <iostream>
 #if defined(USE_OPENMPT)
@@ -143,6 +144,41 @@ signed char SOUND_SetPan(int channel, int pan) {
 
 MUSIC_MODULE *MUSIC_LoadSong(const char *filename) {
     MUSIC_MODULE *music = nullptr;
+
+    /*
+     * Comprobar que SDL_mixer sabe leer el formato ANTES de intentarlo.
+     *
+     * Hurrican carga SIEMPRE las canciones de cada nivel, tambien cuando el jugador no quiere
+     * musica, y ademas carga la del menu. Si el decodificador no esta disponible,
+     * Mix_LoadMUS() falla y unos cientos de lineas mas abajo el motor hace GameRunning =
+     * false: la app se cierra sola sin decir nada. Con esta comprobacion la partida sigue
+     * adelante en silencio y el aviso queda en el log.
+     */
+    if (filename != nullptr && filename[0] != '\0') {
+        const char *base = strrchr(filename, '.');
+        const int tipos = Mix_GetNumMusicDecoders();
+        bool soportado = (base == nullptr);  // sin extension: que decida SDL_mixer
+
+        for (int i = 0; !soportado && base != nullptr && i < tipos; i++) {
+            const char *nombre = Mix_GetMusicDecoder(i);
+            if (nombre != nullptr && SDL_strcasecmp(nombre, base + 1) == 0)
+                soportado = true;
+        }
+
+        // Algunos decodificadores se anuncian por su nombre interno ("libxmp", "MOD").
+        if (!soportado) {
+            Protokoll << "AVISO: SDL_mixer no anuncia decodificador para " << filename
+                      << " (decodificadores: ";
+            for (int i = 0; i < tipos; i++) {
+                const char *nombre = Mix_GetMusicDecoder(i);
+                if (nombre != nullptr)
+                    Protokoll << nombre << " ";
+            }
+            Protokoll << "). La musica queda en silencio." << std::endl;
+            return nullptr;
+        }
+    }
+
 #if defined(USE_OPENMPT)
     std::vector<char> buffer = LoadFileToMemory(filename);
 

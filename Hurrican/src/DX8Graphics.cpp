@@ -15,6 +15,9 @@
 // --------------------------------------------------------------------------------------
 
 #include "DX8Graphics.hpp"
+#if defined(ANDROID)
+#  include "SDLPort/DebugPanel.hpp"
+#endif
 #include <time.h>
 #include <algorithm>
 #include <stdexcept>
@@ -900,8 +903,9 @@ void DirectGraphicsClass::ShowBackBuffer() {
 //      disabled or unavailable.
 #if SDL_VERSION_ATLEAST(2, 0, 0)
 #  if defined(ANDROID)
-        // El mando virtual se pinta sobre el frame ya escalado, antes de presentar.
+        // El mando virtual y el panel de trucos se pintan sobre el frame ya escalado.
         DrawTouchControls();
+        DebugPanel.Draw(RenderRect);
 #  endif
         SDL_GL_SwapWindow(Window);
 #else  // SDL1.2:
@@ -1058,6 +1062,10 @@ void DirectGraphicsClass::DrawColorVertices(GLenum primitive_type, std::uint32_t
  * SDL_GL_SwapWindow() todavia no se ha llamado, lo que se pinte aqui aparece en el mismo
  * frame, encima del juego.
  */
+void DirectGraphicsClass::PresentNow() {
+    SDL_GL_SwapWindow(Window);
+}
+
 void DirectGraphicsClass::DrawTouchControls() {
     if (!TouchControls.IsActive())
         return;

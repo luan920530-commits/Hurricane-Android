@@ -23,6 +23,8 @@
 
 #  include "AndroidPort.hpp"
 
+#  include "Logdatei.hpp"
+
 #  include <android/asset_manager.h>
 #  include <android/asset_manager_jni.h>
 #  include <android/log.h>
@@ -299,6 +301,35 @@ std::string Android_InitStorage() {
 
 const std::string &Android_GetSavePath() {
     return g_save_path;
+}
+
+std::string Android_BootstrapStorage() {
+    const std::string data_path = Android_InitStorage();
+
+    if (g_save_path.empty())
+        return data_path;
+
+    // 1) El log: se reabre ahora que files/save existe.
+    const std::string log_path = JoinPath(g_save_path, "Game_Log.txt");
+    if (Protokoll.openFile(log_path)) {
+        Protokoll << "\n=== Hurrican (Android) ===" << std::endl;
+        LogInfo("Log en " + log_path);
+    } else {
+        LogError("No se pudo abrir " + log_path + "; se registra solo en logcat");
+    }
+
+    // 2) Directorio de trabajo = files/. En Android el proceso arranca en "/", que no se
+    //    puede escribir, y el motor tiene rutas relativas heredadas de la version de
+    //    escritorio (temp.map, el propio log...). Con esto caen dentro de la app.
+    const std::string files_dir = GetFilesDir();
+    if (!files_dir.empty()) {
+        if (::chdir(files_dir.c_str()) == 0)
+            LogInfo("Directorio de trabajo: " + files_dir);
+        else
+            LogError("No se pudo cambiar el directorio de trabajo a " + files_dir);
+    }
+
+    return data_path;
 }
 
 #endif /* ANDROID */

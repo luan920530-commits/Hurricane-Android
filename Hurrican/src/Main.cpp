@@ -45,6 +45,7 @@ namespace fs = std::filesystem;
 #if defined(ANDROID)
 #  include "DX8Graphics.hpp"
 #  include "SDLPort/AndroidError.hpp"
+#  include "SDLPort/DebugPanel.hpp"
 #  include "SDLPort/AndroidPort.hpp"
 #  include "SDLPort/TouchControls.hpp"
 #endif
@@ -375,7 +376,7 @@ int main(int argc, char *argv[]) {
          * normales. Android_InitStorage() los copia al almacenamiento interno la primera vez
          * y devuelve ese directorio.
          */
-        g_storage_ext = Android_InitStorage();
+        g_storage_ext = Android_BootstrapStorage();
         g_save_ext = Android_GetSavePath();
         g_config_ext = g_save_ext;
         if (g_storage_ext.empty() || g_save_ext.empty()) {
@@ -448,12 +449,29 @@ int main(int argc, char *argv[]) {
         Protokoll << "\n-> GameInit successful!\n" << std::endl;
     }
 
+#if defined(ANDROID)
+    /*
+     * Logo de arranque.
+     *
+     * Hasta que el motor dibuja su primer fotograma la superficie esta en negro, y la
+     * inicializacion de Android (copia de datos la primera vez, compilacion de shaders,
+     * carga de texturas) tarda varios segundos. El jugador solo veia una pantalla negra y,
+     * si algo fallaba, un cierre. Este cartel aparece en cuanto hay contexto OpenGL y se
+     * mantiene hasta que el juego pinta de verdad, para que se distinga "esta cargando" de
+     * "se ha quedado colgado".
+     */
+    Android_ShowStartupScreen("Hurrican", "Cargando...");
+#endif
+
     //----- Main-Loop
 
 #if defined(ANDROID)
     // Marcada cuando Android destruye el contexto OpenGL; se repara fuera del bucle de
     // eventos para no recompilar shaders en mitad del procesado.
     bool context_lost = false;
+    // true mientras el dedo que abrio/interactuo con el panel sigue en la pantalla, para que
+    // ese mismo toque no llegue al mando virtual.
+    bool DebugPanelOpenBlock = false;
 #endif
 
     while (GameRunning) {
@@ -502,6 +520,33 @@ int main(int argc, char *argv[]) {
                     break;
 #endif
 #if defined(ANDROID)
+                /*
+                 * Toques para el panel de depuracion.
+                 *
+                 * Se procesan aqui, antes que el mando virtual, para que mientras el panel
+                 * esta abierto el jugador no mueva al personaje sin querer. El dedo se pasa
+                 * en coordenadas normalizadas de ventana, que es lo que da SDL.
+                 */
+                case SDL_FINGERDOWN:
+                case SDL_FINGERUP: {
+                    const bool down = (event.type == SDL_FINGERDOWN);
+                    if (down && DebugPanel.IsOpen()) {
+                        DebugPanel.HandleTouch(event.tfinger.x, event.tfinger.y, true,
+                                               DirectGraphics.GetRenderRect());
+                        DebugPanelOpenBlock = true;
+                    } else if (!down && DebugPanelOpenBlock) {
+                        DebugPanel.HandleTouch(event.tfinger.x, event.tfinger.y, false,
+                                               DirectGraphics.GetRenderRect());
+                        DebugPanelOpenBlock = false;
+                    } else if (down) {
+                        // Panel cerrado: un toque en el boton DBG lo abre.
+                        const float px = event.tfinger.x * static_cast<float>(DirectGraphics.GetWindowWidth());
+                        const float py = event.tfinger.y * static_cast<float>(DirectGraphics.GetWindowHeight());
+                        if (TouchControls.HitDebugButton(px, py, DirectGraphics.GetRenderRect()))
+                            DebugPanel.SetOpen(true);
+                    }
+                    break;
+                }
                 case SDL_WINDOWEVENT:
                     if (event.window.event == SDL_WINDOWEVENT_RESIZED ||
                         event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
@@ -925,6 +970,15 @@ bool GameExit() {
 // --------------------------------------------------------------------------------------
 
 bool Heartbeat() {
+#if defined(ANDROID)
+    /*
+     * Trucos del panel de depuracion que el motor va gastando durante la partida (vidas,
+     * granadas, powerlines, smart bombs y niveles de arma). Se reaplican aqui, una vez por
+     * frame: es lo mas simple y lo que menos se mete en el codigo original.
+     */
+    DebugPanel.ApplyFrameCheats();
+#endif
+
     switch (SpielZustand) {
         // Cracktro
         case GameStateEnum::CRACKTRO: {

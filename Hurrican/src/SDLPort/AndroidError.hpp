@@ -29,6 +29,18 @@
 void Android_ShowFatalError(const std::string &title, const std::string &message,
                             const std::string &log_tail = std::string());
 
+/**
+ * Pinta un cartel de "cargando" sobre el framebuffer por defecto.
+ *
+ * Se llama justo despues de inicializar la grafica y antes de entrar en el bucle del juego.
+ * Sirve para que el arranque no sea una pantalla negra: si la app se queda aqui, el jugador
+ * ve que se quedo cargando (y el cartel dice en que paso), no una app rota.
+ *
+ * @param title  titulo en grande
+ * @param status linea de estado (p. ej. "Copiando datos del juego...")
+ */
+void Android_ShowStartupScreen(const std::string &title, const std::string &status);
+
 #endif /* ANDROID */
 
 #endif /* _ANDROIDERROR_HPP_ */

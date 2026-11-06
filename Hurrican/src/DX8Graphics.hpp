@@ -140,6 +140,8 @@ class DirectGraphicsClass {
     void DrawColorVertices(GLenum primitive_type, std::uint32_t primitive_count,
                            VERTEX2D *vertices, const glm::mat4x4 &matrix);
     void DrawTouchControls();
+    /// Presenta el framebuffer por defecto (lo usa el cartel de carga).
+    void PresentNow();
 
     /**
      * Reconstruye todo el estado de GPU (shaders, FBO y texturas) despues de que Android

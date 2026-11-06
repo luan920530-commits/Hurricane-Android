@@ -15,6 +15,9 @@
 // --------------------------------------------------------------------------------------
 
 #include "Player.hpp"
+#if defined(ANDROID)
+#  include "SDLPort/DebugPanel.hpp"
+#endif
 #include <stdio.h>
 #include <algorithm>
 #include <string>
@@ -321,7 +324,12 @@ void PlayerClass::runExplode() {
         CollideRect.bottom = 79;
 
         // Dann ein Leben abziehen
-        Lives--;
+#if defined(ANDROID)
+        // Truco "vidas infinitas" del panel de depuracion: la explosion termina, pero no
+        // se descuenta vida y el jugador reaparece.
+        if (!DebugPanelClass::InfiniteLives())
+#endif
+            Lives--;
         if (Lives < 0)
             Handlung = PlayerActionEnum::TOT;
 

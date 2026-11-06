@@ -36,6 +36,22 @@ std::string Android_InitStorage();
 const std::string &Android_GetSavePath();
 
 /**
+ * Punto de entrada de la app en Android.
+ *
+ * Hace dos cosas antes de que el motor toque ningun fichero:
+ *
+ *  1. Redirige el log a files/save/Game_Log.txt. El objeto de log global se construye antes
+ *     de SDL_main(), cuando el directorio de guardado aun no existe, asi que alli no se
+ *     puede abrir: se reabre aqui.
+ *  2. Cambia el directorio de trabajo del proceso a files/, para que cualquier ruta
+ *     relativa que use el motor ("Game_Log.txt", "temp.map", ficheros de configuracion
+ *     heredados) acabe en un sitio escribible en lugar de en "/", que es de solo lectura.
+ *
+ * @return ruta absoluta del directorio de datos (el mismo que Android_InitStorage()).
+ */
+std::string Android_BootstrapStorage();
+
+/**
  * Devuelve la version de los datos instalados, leyendo un fichero marcador. Vacio si no
  * existe todavia (primera ejecucion o instalacion incompleta).
  */
