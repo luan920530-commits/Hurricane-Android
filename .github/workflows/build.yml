@@ -43,12 +43,14 @@ on:
     paths:
       - "Hurrican/**"
       - "android/**"
-      - ".github/workflows/build.yml"
+      # Incluye los scripts auxiliares (.github/scripts/...), que tambien forman parte de
+      # la compilacion: si se tocan, conviene volver a comprobarla.
+      - ".github/**"
   pull_request:
     paths:
       - "Hurrican/**"
       - "android/**"
-      - ".github/workflows/build.yml"
+      - ".github/**"
 
 permissions:
   contents: read
