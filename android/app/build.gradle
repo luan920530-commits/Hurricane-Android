@@ -17,6 +17,26 @@ android {
     namespace 'org.hurrican.game'
     compileSdk 34
 
+    // Version explicita del NDK: evita que cada maquina (o cada runner de CI) use una
+    // distinta y que la compilacion cambie de comportamiento sin tocar el codigo.
+    ndkVersion "26.1.10909125"
+
+    /*
+     * Los datos del juego viven en Hurrican/ (una sola copia, la misma que usa la version de
+     * escritorio). AGP los necesita en app/src/main/assets, asi que se preparan con una tarea
+     * de Gradle antes del empaquetado.
+     *
+     * No se hace en CMake a proposito: AGP empaqueta los assets ANTES de compilar el codigo
+     * nativo, asi que un paso dentro de CMake llegaria tarde y la primera compilacion
+     * generaria un APK sin datos del juego.
+     */
+    sourceSets {
+        main {
+            // .get() convierte el Provider en File: srcDirs necesita rutas, no Providers.
+            assets.srcDirs += layout.buildDirectory.dir("generated/assets/hurrican").get().asFile
+        }
+    }
+
     defaultConfig {
         applicationId "org.hurrican.game"
         minSdk 21          // API 21: OpenGL ES 2 + AAudio/OpenSL disponibles en todo el parque
@@ -26,18 +46,27 @@ android {
 
         externalNativeBuild {
             cmake {
-                // ARM (moviles reales) + x86_64 (emulador de escritorio).
-                // Para reducir el tamano del APK, comenta las ABI que no necesites.
-                abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64'
+                /*
+                 * ABI por defecto: ARM (moviles reales) + x86_64 (emulador).
+                 * La lista se puede sobreescribir desde la linea de comandos o desde CI con
+                 *   ./gradlew assembleDebug -Pabi=arm64-v8a
+                 * que es lo que usa el workflow de GitHub Actions para no compilar de mas.
+                 */
+                def abiList = providers.gradleProperty("abi").getOrElse("arm64-v8a,armeabi-v7a,x86_64")
+                abiFilters(*abiList.split(",").collect { it.trim() })
 
-                arguments "-DANDROID_STL=c++_shared",
-                          "-DCMAKE_BUILD_TYPE=Release"
+                /*
+                 * No se fija CMAKE_BUILD_TYPE: lo decide AGP segun el tipo de compilacion y
+                 * el ABI (le pasa su propia cadena de herramientas). Forzarlo aqui hacia que
+                 * el APK de debug compilase en Release y que Gradle avisase por conflicto.
+                 */
+                arguments "-DANDROID_STL=c++_shared"
                 cppFlags "-std=c++17", "-fexceptions", "-frtti"
             }
         }
 
-        // El motor trae su propio C++17; no comprimimos los assets para acelerar la primera
-        // copia de datos al almacenamiento interno.
+        // Sin simbolos de depuracion en el APK: el binario baja de ~30 MB a ~8 MB por ABI
+        // y para depurar ya estan los mensajes de logcat.
         ndk {
             debugSymbolLevel 'none'
         }
@@ -90,4 +119,41 @@ android {
 
 dependencies {
     // Sin dependencias externas: SDL y el juego van dentro del binario nativo.
+}
+
+// ---------------------------------------------------------------------------------------
+// Preparacion de los assets del juego
+//
+// Copia incremental (solo lo que cambia) de Hurrican/data y Hurrican/lang al directorio de
+// assets generado. Se engancha a preBuild y a mergeAssets para que exista siempre antes de
+// construir el APK, tanto en Android Studio como en ./gradlew y en CI.
+// ---------------------------------------------------------------------------------------
+def hurricanData = rootProject.file("../Hurrican")
+
+tasks.register("copyHurricanAssets", Copy) {
+    description = "Copia los datos del juego (Hurrican/data y Hurrican/lang) a los assets"
+    group = "hurrican"
+
+    // Sin datos del juego el APK se generaria pero se cerraria al arrancar, asi que es mejor
+    // fallar aqui con un mensaje claro que dejar un APK roto.
+    doFirst {
+        if (!hurricanData.isDirectory()) {
+            throw new GradleException(
+                "No se encuentra la carpeta de datos del juego en '${hurricanData}'.\n" +
+                "El proyecto Android espera el arbol de Hurrican (src/, data/, lang/) junto a la " +
+                "carpeta android/ en la raiz del repositorio.")
+        }
+    }
+
+    from(hurricanData) {
+        include "data/**"
+        include "lang/**"
+    }
+    into layout.buildDirectory.dir("generated/assets/hurrican")
+}
+
+tasks.configureEach { task ->
+    if (task.name == "preBuild" || task.name.startsWith("merge") && task.name.endsWith("Assets")) {
+        task.dependsOn("copyHurricanAssets")
+    }
 }

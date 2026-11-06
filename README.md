@@ -22,6 +22,9 @@ móvil moderno.
 | Música `.it` con libxmp | lista |
 | Empaquetado del APK (Gradle + manifiesto + icono) | lista |
 
+**La APK se compila en GitHub Actions**, sin instalar nada en tu ordenador: pestaña
+**Actions → Build APK → Run workflow**, y al terminar se descarga desde *Artifacts*.
+
 **Sin verificar en un dispositivo real**: en este entorno no hay SDK de Android ni NDK, así
 que no se ha podido generar ni ejecutar la APK. Todos los ficheros modificados se han
 verificado con un compilador de C++ de escritorio usando cabeceras de OpenGL ES simuladas
@@ -31,20 +34,49 @@ verificado con un compilador de C++ de escritorio usando cabeceras de OpenGL ES 
 
 ## Compilar
 
-### Requisitos
+### Sin instalar nada: desde GitHub
+
+1. Ve a la pestaña **Actions** del repositorio.
+2. Elige **Build APK** en la lista de la izquierda.
+3. **Run workflow**, selecciona ABI y tipo de compilación (por defecto `debug` para
+   `arm64-v8a` + `armeabi-v7a`) y lánzalo.
+4. Cuando termine (~20–40 min la primera vez), abre la ejecución y descarga
+   **hurrican-android-debug** desde *Artifacts*: es un `.zip` con la APK dentro.
+
+```bash
+unzip hurrican-android-debug.zip
+adb install -r app-debug.apk
+```
+
+> **Si no aparece el botón "Run workflow"**: los workflows de GitHub solo se pueden lanzar a
+> mano cuando el fichero `.github/workflows/build.yml` existe en la rama por defecto del
+> repositorio (*Settings → Branches*). Si no está, basta con fusionar esta rama en `main`, o
+> hacer cualquier *push* a una rama con cambios en `Hurrican/`, `android/` o el workflow: se
+> compila igualmente. Comprobado también que el workflow arranca desde cualquier rama.
+
+La APK **no está firmada con una clave de publicación**: es una APK de depuración (o de
+release firmada con la clave de depuración). Android avisará de "origen desconocido"; hay que
+permitir la instalación desde el navegador o desde *adb*. Para publicar en una tienda hay que
+crear un keystore propio y configurarlo en `android/app/build.gradle`.
+
+### Con Android Studio o por línea de comandos
+
+Esto es lo mismo que hace el workflow, pero en tu máquina:
+
+#### Requisitos
 
 - Android Studio (Ladybug o posterior) con el NDK y CMake instalados, o bien el SDK de
   Android por línea de comandos con `ANDROID_HOME` configurado.
 - NDK 26 o posterior, CMake 3.22 o posterior, JDK 17.
 - Unos 2 GB de espacio libre para los objetos intermedios.
 
-### Con Android Studio
+#### Con Android Studio
 
 1. *File → Open* y elige la carpeta `android/` (no la raíz del repositorio).
 2. Deja que Gradle sincronice.
 3. *Run* sobre un dispositivo o emulador.
 
-### Por línea de comandos
+#### Por línea de comandos
 
 ```bash
 cd android

@@ -62,17 +62,21 @@ add_subdirectory(SDL_image EXCLUDE_FROM_ALL)
 # ---------------------------------------------------------------------------------------
 set(BUILD_SHARED OFF CACHE BOOL "" FORCE)
 set(BUILD_STATIC ON CACHE BOOL "" FORCE)
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(LIBXMP_PIC ON CACHE BOOL "" FORCE)
 set(LIBXMP_DISABLE_DEPACKERS OFF CACHE BOOL "" FORCE)
 set(LIBXMP_DISABLE_PROWIZARD ON CACHE BOOL "" FORCE)
 set(WITH_UNIT_TESTS OFF CACHE BOOL "" FORCE)
-add_subdirectory(libxmp EXCLUDE_FROM_ALL)
+
+# Se coloca en external/libxmp porque es exactamente donde SDL_mixer lo busca cuando
+# compila en modo "vendored". Asi SDL_mixer lo anade el solo y no dependemos de que
+# find_package(libxmp) encuentre un paquete instalado, que en Android no existe.
+add_subdirectory(external/libxmp EXCLUDE_FROM_ALL)
 
 # ---------------------------------------------------------------------------------------
 # SDL2_mixer (static, linked into libmain.so together with libxmp)
 # ---------------------------------------------------------------------------------------
-set(SDL2MIXER_VENDORED OFF CACHE BOOL "" FORCE)
+# VENDORED ON = usa el libxmp que llevamos en external/, sin buscar paquetes del sistema.
+set(SDL2MIXER_VENDORED ON CACHE BOOL "" FORCE)
 set(SDL2MIXER_DEPS_SHARED OFF CACHE BOOL "" FORCE)
 set(SDL2MIXER_MOD ON CACHE BOOL "" FORCE)
 set(SDL2MIXER_MOD_XMP ON CACHE BOOL "" FORCE)
@@ -87,6 +91,9 @@ set(SDL2MIXER_FLAC_LIBFLAC OFF CACHE BOOL "" FORCE)
 set(SDL2MIXER_FLAC_DRFLAC ON CACHE BOOL "" FORCE)
 set(SDL2MIXER_VORBIS OFF CACHE BOOL "" FORCE)
 set(SDL2MIXER_MIDI OFF CACHE BOOL "" FORCE)
+# SDL2MIXER_MOD_XMP usa el libxmp vendored; no marcar como "shared" para que quede estatico
+# dentro de libmain.so.
+set(SDL2MIXER_MOD_XMP_SHARED OFF CACHE BOOL "" FORCE)
 add_subdirectory(SDL_mixer EXCLUDE_FROM_ALL)
 
 # ---------------------------------------------------------------------------------------
@@ -161,7 +168,6 @@ target_link_libraries(main PRIVATE
     SDL2
     SDL2_image
     SDL2_mixer
-    xmp_static
     GLESv2
     OpenSLES
     log
@@ -174,24 +180,10 @@ target_link_libraries(main PRIVATE
 set_target_properties(main PROPERTIES OUTPUT_NAME "main")
 
 # ---------------------------------------------------------------------------------------
-# Assets
+# Assets (los prepara Gradle, no CMake)
 #
-# Gradle toma los assets de "assets/" junto al modulo de la app, pero los datos del juego
-# viven en Hurrican/ (una sola copia en el repositorio, la misma que usa la version de
-# escritorio). En vez de duplicar ~90 MB o depender de enlaces simbolicos -que no funcionan
-# en Windows, donde la mayoria de la gente va a compilar esto-, se crean aqui.
-#
-# Android_InitStorage() copia este directorio al almacenamiento interno la primera vez que
-# se abre el juego.
+# AGP empaqueta los assets ANTES de invocar a CMake, asi que el paso que copia
+# Hurrican/{data,lang} a app/build/generated/assets/hurrican vive en app/build.gradle
+# (tarea copyHurricanAssets). Si se hiciera aqui, la primera compilacion generaria un APK
+# sin los datos del juego.
 # ---------------------------------------------------------------------------------------
-set(ASSETS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../assets")
-
-add_custom_target(hurrican_assets ALL
-    COMMAND ${CMAKE_COMMAND}
-            -DHURRICAN_SOURCE=${HURRICAN_DIR}
-            -DASSETS_DIR=${ASSETS_DIR}
-            -P "${CMAKE_CURRENT_SOURCE_DIR}/copy_assets.cmake"
-    COMMENT "Preparando assets del juego (data/ y lang/)"
-    VERBATIM)
-
-add_dependencies(main hurrican_assets)
