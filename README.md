@@ -28,10 +28,9 @@ móvil moderno.
 workflow compila el motor y las dependencias con el NDK, comprueba que la APK lleva dentro
 los datos del juego (más de 600 ficheros y 60 MB de assets) y la publica como artefacto.
 
-**Sin verificar en un dispositivo real**: la compilación está verificada de principio a fin
-en los servidores de GitHub (JDK 17 + NDK 26 + CMake 3.22, las dos ABI), pero no se ha
-ejecutado en un móvil, así que el aspecto del mando táctil, los tiempos de carga y el
-rendimiento están sin ajustar. Para diagnosticar, el juego escribe en `logcat` con la
+El arranque de una versión anterior se ha comprobado en un móvil. Los cambios actuales del
+mando táctil deben probarse también en un dispositivo real; su aspecto, tiempos de carga y
+rendimiento pueden necesitar ajustes. Para diagnosticar, el juego escribe en `logcat` con la
 etiqueta `Hurrican` y en `files/save/Game_Log.txt`.
 
 ---
@@ -141,47 +140,33 @@ Tarda unos segundos y solo ocurre una vez, o cuando cambia la versión de los da
 
 ## Los controles
 
-El juego sólo entiende teclado, así que el mando virtual **no reimplementa la lógica**: marca
-las mismas teclas que el motor ya consulta (`DIK_LEFT`, `DIK_LCTRL`, …). Por eso siguen
-funcionando el menú del juego, la reasignación de controles y los gamepads.
+El mando táctil controla directamente las acciones del jugador 1, sin cambiar su configuración
+ni interferir con un teclado o mando físico. En los menús, el joystick desplaza la selección y
+**SALTO**, **FUEGO** o **ARMA** confirman; **PAUSA** vuelve atrás.
 
-El diseño es el de los juegos de acción de móvil (Free Fire, Call of Duty Mobile): **joystick
-analógico flotante a la izquierda y botones grandes en arco a la derecha**, todo con los dos
-pulgares y sin soltar el dispositivo.
-
-```
-   [II]                                              [DBG]
-
-                     ( zona de juego )
-
-        (joystick)                   (A)  saltar
-          MOVER                (W) (B) disparar (C)
-                             (P)  (S)   (G)
-```
-
-| Zona | Acción del juego |
+| Control | Acción del juego |
 |---|---|
-| Joystick (aparece donde toques, tercio izquierdo) | moverse; arriba/abajo apuntan |
-| A (grande, arriba a la derecha) | saltar |
-| B (grande, abajo) | disparar |
-| C | blitz |
-| P | powerline |
-| G | granada |
-| S | smart bomb |
-| W | cambiar de arma |
-| II (arriba a la izquierda) | pausa / volver |
-| DBG (arriba a la derecha) | panel de trucos |
+| Joystick izquierdo | moverse; arriba apunta y abajo agacha/apunta abajo |
+| SALTO | saltar |
+| FUEGO | disparar (se puede mantener pulsado) |
+| BLITZ | ataque blitz |
+| RAYO | powerline |
+| GRANADA | lanzar granada |
+| BOMBA | smart bomb |
+| ARMA | cambiar de arma |
+| PAUSA | pausa / volver |
+| DBG | panel de trucos y edición |
 
-Detalles pensados para jugar de verdad:
+El joystick aparece donde se toca en la zona izquierda inferior. Es posible mover, disparar y
+saltar simultáneamente. Los botones se ajustan al área del juego, incluso con bandas laterales.
 
-- **Joystick flotante**: no hay que buscar un círculo dibujado; nace bajo el dedo en cualquier
-  punto del tercio izquierdo de la pantalla y se puede deslizar sin levantarlo.
-- **Multitáctil real**: mover y disparar a la vez, o disparar y saltar.
-- **Tamaño adaptativo**: los botones se dimensionan sobre la altura de la pantalla, así que
-  en un móvil grande son más grandes y en uno pequeño siguen siendo alcanzables.
-- **Modo edición** (desde el panel de trucos): los dedos mueven los botones y el joystick a
-  donde quieras; se queda así hasta cerrar la app.
-- Si se conecta un gamepad Bluetooth, ambos siguen activos.
+Para cambiar su posición, abre **DBG**, activa **EDITAR**, cierra el panel y arrastra los
+controles. Abre **DBG** de nuevo y desactiva **EDITAR** para jugar. La posición se conserva
+mientras la aplicación está abierta, no entre reinicios. Si se conecta un gamepad Bluetooth,
+ambos controles siguen activos.
+
+Las pruebas de lógica táctil se pueden ejecutar sin un SDK de Android con
+`./tests/run_touch_tests.sh`. La comprobación en un móvil real sigue siendo necesaria.
 
 Los ajustes del juego se guardan en `save/Hurrican.cfg` y sobreviven a las actualizaciones.
 

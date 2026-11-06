@@ -17,7 +17,7 @@
  *
  * Funcionamiento: el panel se dibuja en coordenadas de ventana, encima del juego, y consume
  * los toques que caen dentro de su zona. Cuando esta abierto, el mando virtual no procesa
- * dedos (salvo el boton DBG), y el juego se dibuja pero no avanza (se pausa).
+ * dedos; el juego sigue avanzando mientras el panel esta abierto.
  *
  * (c) 2026 - Port de Android, misma licencia que el resto del codigo (MIT).
  **/
@@ -92,15 +92,7 @@ void DebugPanelClass::SetOpen(bool open) {
      * Al abrir el panel se suelta todo lo que el mando virtual tuviera pulsado: si no, el
      * jugador se queda andando o disparando solo mientras navega por los interruptores.
      */
-    if (open_) {
-        if (TastaturPuffer != nullptr) {
-            const_cast<Uint8 *>(TastaturPuffer)[SDL_SCANCODE_LEFT] = 0;
-            const_cast<Uint8 *>(TastaturPuffer)[SDL_SCANCODE_RIGHT] = 0;
-            const_cast<Uint8 *>(TastaturPuffer)[SDL_SCANCODE_UP] = 0;
-            const_cast<Uint8 *>(TastaturPuffer)[SDL_SCANCODE_DOWN] = 0;
-            const_cast<Uint8 *>(TastaturPuffer)[SDL_SCANCODE_LCTRL] = 0;
-        }
-    }
+    TouchControls.CancelTouches();
 
     Protokoll << "Panel de depuracion: " << (open_ ? "abierto" : "cerrado") << std::endl;
 }
@@ -275,12 +267,12 @@ void DebugPanelClass::Draw(const SDL_Rect &screen_rect) {
     const float filas = static_cast<float>(OPT_COUNT) + 2.0f;
     const float alto_fila = panel.h / filas;
     const Option options[OPT_COUNT] = {
-        {"Vidas infinitas", &InfiniteLives_},
-        {"Municion infinita", &InfiniteAmmo_},
-        {"Armas al maximo", &MaxWeapons_},
-        {"Invulnerable", &GodMode_},
-        {"Mostrar FPS", &CommandLineParams.ShowFPS},
-        {"Editar controles", nullptr},
+        {"VIDAS", &InfiniteLives_},
+        {"MUNICION", &InfiniteAmmo_},
+        {"ARMAS MAX", &MaxWeapons_},
+        {"INVULNERABLE", &GodMode_},
+        {"FPS", &CommandLineParams.ShowFPS},
+        {"EDITAR", nullptr},
     };
 
     for (int i = 0; i < OPT_COUNT; i++) {
@@ -297,13 +289,8 @@ void DebugPanelClass::Draw(const SDL_Rect &screen_rect) {
         quad(SDL_FRect{panel.x + panel.w - alto_fila * 1.10f, y + (alto_fila - lado) * 0.5f, lado, lado},
              color);
 
-        // Etiqueta: el motor no puede dibujar texto sin fuente cargada, asi que se marca el
-        // numero de fila y el panel se documenta en la ayuda del boton DBG. Para que sea
-        // legible de un vistazo, las filas activadas llevan una barra ancha y las apagadas
-        // una fina.
-        quad(SDL_FRect{panel.x + alto_fila * 0.35f, y + alto_fila * 0.32f,
-                       panel.w * (on ? 0.40f : 0.18f), alto_fila * 0.26f},
-             on ? 0xC0FFFFFF : 0x60FFFFFF);
+        TouchControls.DrawLabel(options[i].label, panel.x + panel.w * 0.40f, y + alto_fila * 0.44f,
+                                panel.w * 0.68f, alto_fila * 0.36f);
     }
 
     // Boton de cerrar.
@@ -311,6 +298,8 @@ void DebugPanelClass::Draw(const SDL_Rect &screen_rect) {
     quad(SDL_FRect{panel.x + panel.w * 0.25f, y_close + alto_fila * 0.12f, panel.w * 0.5f,
                    alto_fila * 0.62f},
          0xF0A03030);
+    TouchControls.DrawLabel("CERRAR", panel.x + panel.w * 0.5f, y_close + alto_fila * 0.43f,
+                            panel.w * 0.4f, alto_fila * 0.30f);
 }
 
 #endif /* ANDROID */

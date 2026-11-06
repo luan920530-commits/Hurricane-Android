@@ -155,8 +155,7 @@ bool DirectInputClass::Init() {
 #if defined(ANDROID)
     /*
      * El mando virtual se activa siempre que haya pantalla tactil. Si ademas hay un gamepad
-     * emparejado se informa en el log, pero se dejan los dos activos: quien juegue con mando
-     * puede ocultar el overlay desde el menu de opciones del juego.
+     * emparejado se informa en el log; ambos tipos de entrada se usan simultaneamente.
      */
     TouchControls.Init();
     if (JoysticksFound > 0) {
@@ -193,11 +192,11 @@ bool DirectInputClass::UpdateTastatur() {
      * virtual anade sus teclas encima.
      */
     {
-        const Uint8 *sdl_state = SDL_GetKeyboardState(nullptr);
-        if (sdl_state != nullptr) {
-            for (int i = 0; i < MAX_KEYS; i++)
-                TouchKeyboard[i] = sdl_state[i];
-        }
+        int count = 0;
+        const Uint8 *sdl_state = SDL_GetKeyboardState(&count);
+        std::fill(std::begin(TouchKeyboard), std::end(TouchKeyboard), 0);
+        if (sdl_state != nullptr)
+            std::copy_n(sdl_state, std::min(count, MAX_KEYS), TouchKeyboard);
         TastaturPuffer = TouchKeyboard;
     }
     TouchControls.Update(DirectGraphics.GetRenderRect(), DirectGraphics.GetWindowWidth(),
@@ -263,7 +262,7 @@ bool DirectInputClass::AreAllKeysReleased() const {
 
 bool DirectInputClass::AnyKeyDown() const {
     for (int i = 0; i < std::min(NumberOfKeys, MAX_KEYS); i++)
-        if (KeyDown(i))
+        if (TastaturPuffer[i] != 0)
             return true;
 
     return false;

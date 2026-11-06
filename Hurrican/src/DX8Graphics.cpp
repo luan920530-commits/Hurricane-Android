@@ -1072,6 +1072,8 @@ void DirectGraphicsClass::DrawTouchControls() {
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, WindowView.w, WindowView.h);
+    // El ultimo sprite puede haber dejado activado el modo aditivo o blanco.
+    SetColorKeyMode();
 
     const glm::mat4x4 saved_model_view = g_matModelView;
     g_matModelView = glm::mat4x4(1.0f);

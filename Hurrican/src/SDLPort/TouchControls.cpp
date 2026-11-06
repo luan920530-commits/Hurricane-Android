@@ -1,10 +1,8 @@
 /**
  * Implementacion del mando virtual de Android. Vease TouchControls.hpp.
  *
- * Nota sobre el estado de las teclas: el motor guarda las pulsaciones en la tabla que
- * devuelve SDL_GetKeyboardState(), que es de solo lectura para nosotros. Por eso en Android
- * DirectInputClass mantiene su propio buffer (DirectInputClass::TouchKeyboard) y
- * TastaturPuffer apunta a el; aqui solo se marca/desmarca ese buffer.
+ * Las acciones se entregan directamente al jugador. En menus se agregan al buffer de teclado
+ * propio de DirectInput, sin escribir sobre el estado de teclado de SDL.
  *
  * (c) 2026 - Port de Android, misma licencia que el resto del codigo (MIT).
  **/
@@ -21,6 +19,9 @@
 #  include "Globals.hpp"
 #  include "Logdatei.hpp"
 #  include "Main.hpp"
+#  include "Gameplay.hpp"
+#  include "Player.hpp"
+#  include "SDLPort/DebugPanel.hpp"
 
 TouchControlsClass TouchControls;
 
@@ -34,26 +35,9 @@ constexpr std::uint32_t COLOR_STICK_KNOB = 0x50FFFFFF;
 constexpr std::uint32_t COLOR_EDIT = 0x60FF5030;
 constexpr std::uint32_t COLOR_DEBUGBTN = 0x4020FF50;
 
-/*
- * El motor mapea por defecto estas teclas a las acciones del jugador
- * (vease CreateDefaultControlsConfig en Gameplay.cpp):
- *
- *   IZQUIERDA / DERECHA    mover
- *   ARRIBA                 apuntar arriba
- *   ABAJO                  agacharse
- *   DIK_LALT               saltar
- *   DIK_LCTRL              disparar (mantener)
- *   DIK_LSHIFT             blitz
- *   DIK_SPACE              powerline
- *   DIK_RCTRL              granada
- *   DIK_RSHIFT             smart bomb
- *   DIK_RETURN             cambiar de arma
- *   DIK_ESCAPE             pausa / menu
- */
 struct ActionDef {
     float x, y;    // centro, normalizado dentro del area de juego
     float r;       // radio, normalizado respecto a la altura de la pantalla
-    SDL_Keycode key;
     bool toggle;
     const char *label;
 };
@@ -69,51 +53,48 @@ struct ActionDef {
  * sin taparse (disparar + saltar es la combinacion mas habitual).
  */
 const ActionDef ACTIONS[] = {
-    //     x       y       r       tecla          toggle  etiqueta
-    {0.905f, 0.760f, 0.105f, SDLK_LALT, false, "A"},       // ACT_JUMP    saltar
-    {0.780f, 0.860f, 0.125f, SDLK_LCTRL, false, "B"},      // ACT_FIRE    disparar
-    {0.940f, 0.900f, 0.075f, SDLK_LSHIFT, false, "C"},     // ACT_BLITZ   turbo
-    {0.660f, 0.880f, 0.075f, SDLK_SPACE, false, "P"},      // ACT_POWERLINE
-    {0.830f, 0.660f, 0.070f, SDLK_RCTRL, false, "G"},      // ACT_GRENADE
-    {0.700f, 0.700f, 0.070f, SDLK_RSHIFT, false, "S"},     // ACT_SMARTBOMB
-    {0.640f, 0.790f, 0.070f, SDLK_RETURN, false, "W"},     // ACT_WEAPON
-    {0.045f, 0.055f, 0.055f, SDLK_ESCAPE, false, "II"},    // ACT_ESCAPE  pausa
-    {0.945f, 0.055f, 0.055f, 0, true, "DBG"},              // ACT_DEBUG   panel de trucos
+    // Centros en el area de juego; radios proporcionales a su altura.
+    {0.90f, 0.80f, 0.090f,   false, "SALTO"},
+    {0.75f, 0.86f, 0.100f,  false, "FUEGO"},
+    {0.90f, 0.58f, 0.065f, false, "BLITZ"},
+    {0.79f, 0.58f, 0.065f,  false, "RAYO"},
+    {0.68f, 0.58f, 0.065f,  false, "GRANADA"},
+    {0.57f, 0.58f, 0.065f, false, "BOMBA"},
+    {0.57f, 0.81f, 0.070f, false, "ARMA"},
+    {0.05f, 0.07f, 0.055f, false, "PAUSA"},
+    {0.95f, 0.07f, 0.055f, true, "DBG"},
 };
 
 constexpr int ACTION_COUNT = sizeof(ACTIONS) / sizeof(ACTIONS[0]);
 
 /// Radio del joystick, como fraccion de la altura de la pantalla.
 constexpr float STICK_RADIUS_FRAC = 0.135f;
-/// Zona muerta del joystick (fraccion del radio).
-constexpr float STICK_DEADZONE = 0.30f;
 
 bool g_initialised = false;
 
 }  // namespace
 
 void TouchControlsClass::Init() {
-    available = SDL_GetNumTouchDevices() > 0;
+    // En Android algunos dispositivos solo se anuncian al recibir el primer toque.
+    available = true;
 
     for (int i = 0; i < ACTION_COUNT; i++) {
         actions[i].x = ACTIONS[i].x;
         actions[i].y = ACTIONS[i].y;
         actions[i].r = ACTIONS[i].r;
-        actions[i].scancode = ACTIONS[i].toggle ? 0 : static_cast<int>(SDL_GetScancodeFromKey(ACTIONS[i].key));
         actions[i].is_toggle = ACTIONS[i].toggle;
         actions[i].label = ACTIONS[i].label;
         actions[i].pressed = false;
-        actions[i].finger = -1;
     }
 
     active = available && enabled;
+    wait_for_release = false;
     g_initialised = true;
     editing = false;
     stick_active = false;
-    stick_finger = -1;
-    debug_requested = false;
+    stick.Reset();
 
-    Protokoll << "Mando virtual: " << (available ? "pantalla tactil detectada" : "sin pantalla tactil")
+    Protokoll << "Mando virtual: " << (available ? "disponible en Android" : "no disponible")
               << ", " << (active ? "activo" : "desactivado") << ", " << ACTION_COUNT << " botones"
               << std::endl;
 }
@@ -150,58 +131,35 @@ void TouchControlsClass::ResetLayout() {
 }
 
 void TouchControlsClass::ClearKeys() {
-    if (TastaturPuffer != nullptr) {
-        for (auto sc : pressed_scancodes) {
-            if (sc > 0 && sc < MAX_KEYS)
-                const_cast<Uint8 *>(TastaturPuffer)[sc] = 0;
-        }
-    }
-    pressed_scancodes.clear();
-
-    for (int i = 0; i < ACTION_COUNT; i++) {
+    for (int i = 0; i < ACTION_COUNT; ++i) {
         actions[i].pressed = false;
-        actions[i].finger = -1;
+        pending[i] = false;
     }
-
-    if (TastaturPuffer != nullptr) {
-        for (const int sc : {SDL_SCANCODE_LEFT, SDL_SCANCODE_RIGHT, SDL_SCANCODE_UP, SDL_SCANCODE_DOWN}) {
-            const_cast<Uint8 *>(TastaturPuffer)[sc] = 0;
-        }
-    }
+    for (bool &direction : directions) direction = false;
+    stick.Reset();
     stick_active = false;
-    stick_finger = -1;
     stick_x = stick_y = 0.0f;
+    dragging = false;
 }
 
-void TouchControlsClass::ComputePixels(const SDL_Rect &screen_rect, float &scale) {
-    // Los botones se miden sobre la ALTURA de la pantalla (no sobre el area 4:3 del juego)
-    // para que en pantallas 20:9 no queden diminutos.
-    scale = static_cast<float>(window_h);
-    if (screen_rect.h <= 0)
-        return;
-}
+void TouchControlsClass::CancelTouches() { ClearKeys(); wait_for_release = true; }
 
-void TouchControlsClass::UpdateJoystick() {
-    if (TastaturPuffer == nullptr)
-        return;
-
-    const float len = std::sqrt(stick_x * stick_x + stick_y * stick_y);
-    const float dead = stick_radius * STICK_DEADZONE;
-
-    const bool left = len > dead && stick_x < 0.0f;
-    const bool right = len > dead && stick_x > 0.0f;
-    const bool up = len > dead && stick_y < 0.0f;
-    const bool down = len > dead && stick_y > 0.0f;
-
-    auto set = [](SDL_Scancode sc, bool on) {
-        if (!on)
-            return;
-        const_cast<Uint8 *>(TastaturPuffer)[sc] = 1;
-    };
-    set(SDL_SCANCODE_LEFT, left);
-    set(SDL_SCANCODE_RIGHT, right);
-    set(SDL_SCANCODE_UP, up);
-    set(SDL_SCANCODE_DOWN, down);
+bool TouchControlsClass::PlayerAction(int action) const {
+    if (!active || editing || DebugPanel.IsOpen()) return false;
+    switch (action) {
+        case AKTION_LINKS: return directions[0];
+        case AKTION_RECHTS: return directions[1];
+        case AKTION_OBEN: return directions[2];
+        case AKTION_UNTEN: case AKTION_DUCKEN: return directions[3];
+        case AKTION_JUMP: return actions[ACT_JUMP].pressed;
+        case AKTION_SHOOT: return actions[ACT_FIRE].pressed;
+        case AKTION_BLITZ: return actions[ACT_BLITZ].pressed;
+        case AKTION_POWERLINE: return actions[ACT_POWERLINE].pressed;
+        case AKTION_GRANATE: return actions[ACT_GRENADE].pressed;
+        case AKTION_SMARTBOMB: return actions[ACT_SMARTBOMB].pressed;
+        case AKTION_WAFFEN_CYCLE: return actions[ACT_WEAPON].pressed;
+        default: return false;
+    }
 }
 
 void TouchControlsClass::UpdateEditing(const SDL_TouchFingerEvent &finger, const SDL_Rect &screen_rect,
@@ -211,10 +169,14 @@ void TouchControlsClass::UpdateEditing(const SDL_TouchFingerEvent &finger, const
     const float py = finger.y * static_cast<float>(win_h);
 
     if (finger.type == SDL_FINGERDOWN) {
+        if (dragging) return;
+        dragging = true;
+        drag_finger = finger.fingerId;
+        drag_device = finger.touchId;
         // Buscar el control mas cercano al toque, con un margen comodo.
         float best = 1e9f;
         int best_action = -1;
-        const float escala = static_cast<float>(win_h);
+        const float escala = static_cast<float>(screen_rect.h);
 
         for (int i = 0; i < ACTION_COUNT; i++) {
             const float cx = screen_rect.x + actions[i].x * screen_rect.w;
@@ -241,7 +203,7 @@ void TouchControlsClass::UpdateEditing(const SDL_TouchFingerEvent &finger, const
             drag_off_x = actions[best_action].x * screen_rect.w - (px - screen_rect.x);
             drag_off_y = actions[best_action].y * screen_rect.h - (py - screen_rect.y);
         }
-    } else if (finger.type == SDL_FINGERMOTION) {
+    } else if (finger.type == SDL_FINGERMOTION && dragging && finger.fingerId == drag_finger && finger.touchId == drag_device) {
         if (drag_stick) {
             stick_default_x = std::clamp((px - screen_rect.x + drag_off_x) / screen_rect.w, 0.05f, 0.95f);
             stick_default_y = std::clamp((py - screen_rect.y + drag_off_y) / screen_rect.h, 0.05f, 0.95f);
@@ -251,137 +213,91 @@ void TouchControlsClass::UpdateEditing(const SDL_TouchFingerEvent &finger, const
             actions[drag_action].y =
                 std::clamp((py - screen_rect.y + drag_off_y) / screen_rect.h, 0.03f, 0.97f);
         }
-    } else if (finger.type == SDL_FINGERUP) {
+    } else if (finger.type == SDL_FINGERUP && dragging && finger.fingerId == drag_finger && finger.touchId == drag_device) {
+        dragging = false;
         drag_action = -1;
         drag_stick = false;
     }
 }
 
-void TouchControlsClass::Update(const SDL_Rect &screen_rect, int win_w, int win_h) {
-    if (!g_initialised || !active || TastaturPuffer == nullptr)
+void TouchControlsClass::HandleFingerEvent(const SDL_TouchFingerEvent &finger, const SDL_Rect &area,
+                                           int win_w, int win_h) {
+    if (!g_initialised || !active || area.w <= 0 || area.h <= 0 || win_w <= 0 || win_h <= 0)
         return;
-
-    window_w = win_w;
-    window_h = win_h;
-
-    if (screen_rect.w <= 0 || screen_rect.h <= 0 || win_w <= 0 || win_h <= 0)
+    if (editing) {
+        UpdateEditing(finger, area, win_w, win_h);
         return;
-
-    // 1) Sueltan las teclas del frame anterior; el estado se reconstruye entero cada frame.
-    for (auto sc : pressed_scancodes) {
-        if (sc > 0 && sc < MAX_KEYS)
-            const_cast<Uint8 *>(TastaturPuffer)[sc] = 0;
     }
-    pressed_scancodes.clear();
-    for (int i = 0; i < ACTION_COUNT; i++)
-        actions[i].pressed = false;
+    // Conserva un toque rapido incluso si baja y sube entre dos frames.
+    if (finger.type == SDL_FINGERDOWN) {
+        std::vector<TouchInput::Button> buttons;
+        for (const auto &action : actions)
+            buttons.push_back({area.x + action.x * area.w, area.y + action.y * area.h, action.r * area.h});
+        const int hit = TouchInput::Hit(buttons, finger.x * win_w, finger.y * win_h);
+        if (hit >= 0 && hit != ACT_DEBUG) pending[hit] = true;
+    }
+}
 
-    stick_radius = STICK_RADIUS_FRAC * static_cast<float>(win_h);
-    stick_x = stick_y = 0.0f;
+void TouchControlsClass::Update(const SDL_Rect &area, int win_w, int win_h) {
+    if (!g_initialised || !active || TastaturPuffer == nullptr) return;
+    if (area.w <= 0 || area.h <= 0 || win_w <= 0 || win_h <= 0) return;
+    if (editing || DebugPanel.IsOpen()) {
+        for (auto &action : actions) action.pressed = false;
+        for (bool &p : pending) p = false;
+        for (bool &direction : directions) direction = false;
+        stick.Reset(); stick_active = false;
+        return;
+    }
 
-    // 2) Un solo dedo manda en el joystick: el que empezo en su zona. Los demas pueden
-    //    pulsar botones a la vez (multitactil real).
-    const SDL_TouchID device = SDL_GetTouchDevice(0);
-    const int fingers_count = device == 0 ? 0 : SDL_GetNumTouchFingers(device);
+    std::vector<TouchInput::Button> buttons;
+    for (const auto &action : actions)
+        buttons.push_back({area.x + action.x * area.w, area.y + action.y * area.h, action.r * area.h});
 
-    for (int i = 0; i < fingers_count; i++) {
-        SDL_Finger *finger = SDL_GetTouchFinger(device, i);
-        if (finger == nullptr)
-            continue;
-
-        const float px = finger->x * static_cast<float>(win_w);
-        const float py = finger->y * static_cast<float>(win_h);
-
-        if (px < screen_rect.x || py < screen_rect.y || px > screen_rect.x + screen_rect.w ||
-            py > screen_rect.y + screen_rect.h)
-            continue;
-
-        const float nx = (px - screen_rect.x) / static_cast<float>(screen_rect.w);
-        const float ny = (py - screen_rect.y) / static_cast<float>(screen_rect.h);
-
-        // 2a) Botones.
-        bool used = false;
-        for (int b = 0; b < ACTION_COUNT; b++) {
-            if (actions[b].pressed)
-                continue;
-
-            const float rx = actions[b].r * static_cast<float>(win_h) / static_cast<float>(screen_rect.w);
-            const float ry = actions[b].r;
-
-            const float dx = (nx - actions[b].x) / (rx > 0.0f ? rx : 1.0f);
-            const float dy = (ny - actions[b].y) / (ry > 0.0f ? ry : 1.0f);
-            if (dx * dx + dy * dy > 1.0f)
-                continue;
-
-            actions[b].pressed = true;
-            used = true;
-
-            if (actions[b].is_toggle) {
-                // El boton de debug solo avisa del toque; el panel lo gestiona DebugPanel.
-                if (b == ACT_DEBUG)
-                    debug_requested = true;
-            } else if (actions[b].scancode > 0) {
-                const_cast<Uint8 *>(TastaturPuffer)[actions[b].scancode] = 1;
-                pressed_scancodes.push_back(actions[b].scancode);
-            }
-            break;
-        }
-        if (used)
-            continue;
-
-        /*
-         * 2b) Joystick flotante.
-         *
-         * No esta atado a una posicion fija: cualquier toque en la zona de movimiento lo
-         * "crea" ahi mismo (asi lo hacen los juegos de accion en movil, y es mucho mas
-         * comodo que buscar un circulo dibujado). Si hay un joystick dibujado en su sitio
-         * por defecto y se toca ahi, tambien funciona.
-         */
-        const bool in_zone = nx < stick_zone_w && ny < stick_zone_h;
-        const bool on_drawn_stick =
-            std::hypot((nx - stick_default_x) * screen_rect.w, (ny - stick_default_y) * screen_rect.h) <
-            stick_radius * 1.2f;
-
-        if (in_zone || on_drawn_stick) {
-            if (!stick_active) {
-                stick_active = true;
-                stick_finger = i;
-                // Si el toque fue cerca del joystick dibujado, se centra en el; si no, nace
-                // bajo el dedo.
-                if (on_drawn_stick) {
-                    stick_origin_x = screen_rect.x + stick_default_x * screen_rect.w;
-                    stick_origin_y = screen_rect.y + stick_default_y * screen_rect.h;
-                } else {
-                    stick_origin_x = px;
-                    stick_origin_y = py;
-                }
-            }
-            if (stick_finger == i) {
-                float dx = px - stick_origin_x;
-                float dy = py - stick_origin_y;
-                const float len = std::sqrt(dx * dx + dy * dy);
-                if (len > stick_radius) {
-                    dx *= stick_radius / len;
-                    dy *= stick_radius / len;
-                }
-                stick_x = dx;
-                stick_y = dy;
-            }
+    std::vector<TouchInput::Finger> fingers;
+    // El identificador cero es valido, y puede haber mas de un dispositivo de entrada.
+    for (int d = 0; d < SDL_GetNumTouchDevices(); ++d) {
+        const SDL_TouchID device = SDL_GetTouchDevice(d);
+        for (int i = 0; i < SDL_GetNumTouchFingers(device); ++i) {
+            const SDL_Finger *f = SDL_GetTouchFinger(device, i);
+            if (f) fingers.push_back({device, f->id, f->x * win_w, f->y * win_h});
         }
     }
+    if (wait_for_release) {
+        for (bool &p : pending) p = false;
+        if (!fingers.empty()) return;
+        wait_for_release = false;
+    }
+    const TouchInput::Rect rect{static_cast<float>(area.x), static_cast<float>(area.y),
+                                static_cast<float>(area.w), static_cast<float>(area.h)};
+    stick.Update(fingers, rect, buttons, stick_default_x, stick_default_y);
+    stick_active = stick.active;
+    stick_origin_x = stick.origin_x; stick_origin_y = stick.origin_y;
+    stick_x = stick.x; stick_y = stick.y;
+    stick_radius = STICK_RADIUS_FRAC * area.h;
+    directions[0] = stick.Left(stick_radius); directions[1] = stick.Right(stick_radius);
+    directions[2] = stick.Up(stick_radius); directions[3] = stick.Down(stick_radius);
 
-    if (fingers_count == 0) {
-        stick_active = false;
-        stick_finger = -1;
+    for (int i = 0; i < ACTION_COUNT; ++i) {
+        actions[i].pressed = pending[i];
+        pending[i] = false;
+    }
+    for (const auto &finger : fingers) {
+        if (stick.Owns(finger)) continue;
+        const int hit = TouchInput::Hit(buttons, finger.x, finger.y);
+        if (hit >= 0) actions[hit].pressed = true;
     }
 
-    // 3) Volcar el joystick y las teclas al buffer que consulta el juego.
-    if (stick_active)
-        UpdateJoystick();
-
-    for (auto sc : pressed_scancodes) {
-        if (sc > 0 && sc < MAX_KEYS)
-            const_cast<Uint8 *>(TastaturPuffer)[sc] = 1;
+    // Los menus esperan teclas; durante la partida se usan acciones directamente, sin
+    // interferir con las teclas reasignadas ni con un mando fisico.
+    auto key = [](SDL_Scancode sc) { const_cast<Uint8 *>(TastaturPuffer)[sc] = 1; };
+    if (actions[ACT_ESCAPE].pressed) key(SDL_SCANCODE_ESCAPE);
+    if (SpielZustand != GameStateEnum::GAMELOOP) {
+        if (directions[0]) key(SDL_SCANCODE_LEFT);
+        if (directions[1]) key(SDL_SCANCODE_RIGHT);
+        if (directions[2]) key(SDL_SCANCODE_UP);
+        if (directions[3]) key(SDL_SCANCODE_DOWN);
+        if (actions[ACT_JUMP].pressed || actions[ACT_FIRE].pressed || actions[ACT_WEAPON].pressed)
+            key(SDL_SCANCODE_RETURN);
     }
 }
 
@@ -426,6 +342,59 @@ void TouchControlsClass::DrawDisc(float cx, float cy, float rx, float ry, std::u
         fan[s + 1].tv = 0.0f;
     }
     DirectGraphics.DrawColorVertices(GL_TRIANGLE_FAN, SEGMENTS + 2, fan, window_matrix);
+}
+
+// Fuente 5x7 propia: no depende de texturas del juego ni del idioma cargado.
+void TouchControlsClass::DrawLabel(const char *text, float cx, float cy, float max_width, float height) {
+    auto glyph = [](char c) -> const char * {
+        switch (c) {
+        case 'A': return "01110100011000111111100011000110001";
+        case 'B': return "11110100011000111110100011000111110";
+        case 'C': return "01111100001000010000100001000001111";
+        case 'D': return "11110100011000110001100011000111110";
+        case 'E': return "11111100001000011110100001000011111";
+        case 'F': return "11111100001000011110100001000010000";
+        case 'G': return "01111100001000010111100011000101111";
+        case 'H': return "10001100011000111111100011000110001";
+        case 'I': return "11111001000010000100001000010011111";
+        case 'L': return "10000100001000010000100001000011111";
+        case 'M': return "10001110111010110101100011000110001";
+        case 'N': return "10001110011010110011100011000110001";
+        case 'O': return "01110100011000110001100011000101110";
+        case 'P': return "11110100011000111110100001000010000";
+        case 'R': return "11110100011000111110101001001010001";
+        case 'S': return "01111100001000001110000010000111110";
+        case 'T': return "11111001000010000100001000010000100";
+        case 'U': return "10001100011000110001100011000101110";
+        case 'V': return "10001100011000110001010100101000100";
+        case 'X': return "10001100010101000100010101000110001";
+        case 'Y': return "10001100010101000100001000010000100";
+        case 'Z': return "11111000010001000100010001000011111";
+        default: return "00000000000000000000000000000000000";
+        }
+    };
+    const size_t len = std::char_traits<char>::length(text);
+    if (!len) return;
+    const float pixel = std::min(height / 7.0f, max_width / (len * 6.0f - 1.0f));
+    const float left = cx - (len * 6.0f - 1.0f) * pixel / 2.0f;
+    const float top = cy - 3.5f * pixel;
+    std::vector<VERTEX2D> vertices;
+    for (size_t n = 0; n < len; ++n) {
+        const char *bits = glyph(text[n]);
+        for (int row = 0; row < 7; ++row) for (int col = 0; col < 5; ++col) {
+            if (bits[row * 5 + col] != '1') continue;
+            const float x = left + (n * 6 + col) * pixel, y = top + row * pixel;
+            const HCOLOR color(0xF0FFFFFF);
+            vertices.push_back(VERTEX2D{x, y, color, 0, 0});
+            vertices.push_back(VERTEX2D{x, y + pixel, color, 0, 0});
+            vertices.push_back(VERTEX2D{x + pixel, y, color, 0, 0});
+            vertices.push_back(VERTEX2D{x + pixel, y, color, 0, 0});
+            vertices.push_back(VERTEX2D{x, y + pixel, color, 0, 0});
+            vertices.push_back(VERTEX2D{x + pixel, y + pixel, color, 0, 0});
+        }
+    }
+    if (!vertices.empty()) DirectGraphics.DrawColorVertices(GL_TRIANGLES, vertices.size(), vertices.data(),
+                                                             DirectGraphics.GetWindowProjection());
 }
 
 void TouchControlsClass::DrawGeometry(const SDL_Rect &screen_rect) {
@@ -476,6 +445,7 @@ void TouchControlsClass::DrawGeometry(const SDL_Rect &screen_rect) {
         // Aro exterior mas transparente: da relieve y marca mejor el area pulsable.
         DrawDisc(cx, cy, r * 1.10f, r * 1.10f, (color & 0x00FFFFFF) | 0x18000000);
         DrawDisc(cx, cy, r, r, color);
+        DrawLabel(actions[i].label, cx, cy, r * 1.55f, r * 0.42f);
 
         if (editing)
             DrawDisc(cx, cy, r * 0.35f, r * 0.35f, COLOR_EDIT);

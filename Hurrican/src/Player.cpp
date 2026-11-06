@@ -17,6 +17,7 @@
 #include "Player.hpp"
 #if defined(ANDROID)
 #  include "SDLPort/DebugPanel.hpp"
+#  include "SDLPort/TouchControls.hpp"
 #endif
 #include <stdio.h>
 #include <algorithm>
@@ -672,6 +673,18 @@ bool PlayerClass::GetPlayerInput() {
                 }
             }
 
+#if defined(ANDROID)
+            // El mando tactil siempre controla al jugador 1, incluso con mando fisico
+            // o con teclas personalizadas. No modifica las asignaciones guardadas.
+            if (PlayerNumber == 0) {
+                for (int i = 0; i < MAX_AKTIONEN; ++i) {
+                    if (TouchControls.PlayerAction(i)) {
+                        Aktion[i] = true;
+                        BronsonCounter = 0.0f;
+                    }
+                }
+            }
+#endif
             // Bewegungen aufnehmen ?
             if (DEMORecording)
                 RecordDemo();

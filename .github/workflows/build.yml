@@ -43,6 +43,7 @@ on:
     paths:
       - "Hurrican/**"
       - "android/**"
+      - "tests/**"
       # Incluye los scripts auxiliares (.github/scripts/...), que tambien forman parte de
       # la compilacion: si se tocan, conviene volver a comprobarla.
       - ".github/**"
@@ -50,6 +51,7 @@ on:
     paths:
       - "Hurrican/**"
       - "android/**"
+      - "tests/**"
       - ".github/**"
 
 permissions:
@@ -88,6 +90,9 @@ jobs:
       # un fichero que existe en local pero se quedo fuera del repositorio por .gitignore.
       - name: Comprobar que todos los #include apuntan a ficheros del repositorio
         run: python3 .github/scripts/check_includes.py .
+
+      - name: Probar controles tactiles
+        run: ./tests/run_touch_tests.sh
 
       - name: Instalar JDK 17
         uses: actions/setup-java@v4
