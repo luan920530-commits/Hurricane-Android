@@ -96,20 +96,42 @@ jobs:
           gradle-version: "8.7"
           cache-read-only: false
 
-      - name: Instalar Android SDK y NDK
-        uses: android-actions/setup-android@v3
-        with:
-          # Estas versiones deben coincidir con app/build.gradle (compileSdk 34,
-          # ndkVersion 26.1.10909125, cmake 3.22.1).
-          packages: |
-            platforms;android-34
-            build-tools;34.0.0
-            ndk;26.1.10909125
-            cmake;3.22.1
-          log-accepted-android-sdk-licenses: false
+      # Los runners de ubuntu-latest ya traen el SDK de Android instalado. Se instalan los
+      # componentes que faltan con sdkmanager en lugar de reconfigurar el SDK entero: es mas
+      # rapido y menos fragil. Las versiones deben coincidir con app/build.gradle
+      # (compileSdk 34, ndkVersion 26.1.10909125, cmake 3.22.1).
+      - name: Instalar componentes del SDK de Android
+        run: |
+          set -e
+          SDK="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          if [ -z "$SDK" ]; then
+            echo "::error::ANDROID_HOME no esta definido"; exit 1
+          fi
+          echo "SDK en: $SDK"
+          ls "$SDK"
 
-      - name: Aceptar licencias del SDK
-        run: yes | sdkmanager --licenses > /dev/null || true
+          # Licencias primero: sin ellas sdkmanager se queda esperando una respuesta.
+          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" --install \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            "ndk;26.1.10909125" \
+            "cmake;3.22.1"
+
+      # Comprobacion explicita: si faltase el NDK, Gradle intentaria descargarlo el solo y el
+      # error real quedaria enterrado en su log.
+      - name: Comprobar que el NDK esta disponible
+        run: |
+          set -e
+          SDK="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          if [ ! -d "$SDK/ndk/26.1.10909125" ]; then
+            echo "::error::No se encuentra el NDK 26.1.10909125 en $SDK/ndk"
+            ls "$SDK/ndk" || true
+            exit 1
+          fi
+          echo "NDK OK: $SDK/ndk/26.1.10909125"
+          ls "$SDK/cmake" || true
 
       - name: Compilar la APK
         working-directory: android
