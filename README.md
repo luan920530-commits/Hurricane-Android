@@ -15,7 +15,8 @@ móvil moderno.
 |---|---|
 | Compilación nativa (SDL2 + SDL2_image + SDL2_mixer + libxmp + motor) | lista |
 | OpenGL ES 2.0 + escalado con FBO a pantallas 16:9 / 18:9 / 20:9 | lista |
-| Mando virtual multitáctil | lista |
+| Mando virtual multitáctil (joystick + botones de acción) | lista |
+| Panel de trucos (vidas/munición/armas invulnerabilidad) | listo |
 | Copia inicial de los datos desde el APK al almacenamiento | lista |
 | Supervivencia a la pérdida del contexto GL (segundo plano) | lista |
 | Log en `logcat` + diálogo de error visible | lista |
@@ -144,30 +145,92 @@ El juego sólo entiende teclado, así que el mando virtual **no reimplementa la 
 las mismas teclas que el motor ya consulta (`DIK_LEFT`, `DIK_LCTRL`, …). Por eso siguen
 funcionando el menú del juego, la reasignación de controles y los gamepads.
 
+El diseño es el de los juegos de acción de móvil (Free Fire, Call of Duty Mobile): **joystick
+analógico flotante a la izquierda y botones grandes en arco a la derecha**, todo con los dos
+pulgares y sin soltar el dispositivo.
+
 ```
-   [SALIR]                                    [GRANADA] [BOMBA]
-                          ( juego )
-                      (D-pad)          [ARMA] [POWER]  (A)
-                                                        (B) (C)
+   [II]                                              [DBG]
+
+                     ( zona de juego )
+
+        (joystick)                   (A)  saltar
+          MOVER                (W) (B) disparar (C)
+                             (P)  (S)   (G)
 ```
 
 | Zona | Acción del juego |
 |---|---|
-| D-pad izquierda / derecha | moverse |
-| D-pad abajo | agacharse / apuntar abajo |
-| D-pad arriba | apuntar arriba |
-| A | saltar |
-| B | disparar |
+| Joystick (aparece donde toques, tercio izquierdo) | moverse; arriba/abajo apuntan |
+| A (grande, arriba a la derecha) | saltar |
+| B (grande, abajo) | disparar |
 | C | blitz |
-| POWER | powerline |
-| ARMA | cambiar de arma |
-| GRANADA / BOMBA | granada / smart bomb |
-| SALIR | pausa / volver |
+| P | powerline |
+| G | granada |
+| S | smart bomb |
+| W | cambiar de arma |
+| II (arriba a la izquierda) | pausa / volver |
+| DBG (arriba a la derecha) | panel de trucos |
 
-Es multitáctil: se puede mover y disparar a la vez. Si se conecta un gamepad Bluetooth,
-ambos siguen activos.
+Detalles pensados para jugar de verdad:
+
+- **Joystick flotante**: no hay que buscar un círculo dibujado; nace bajo el dedo en cualquier
+  punto del tercio izquierdo de la pantalla y se puede deslizar sin levantarlo.
+- **Multitáctil real**: mover y disparar a la vez, o disparar y saltar.
+- **Tamaño adaptativo**: los botones se dimensionan sobre la altura de la pantalla, así que
+  en un móvil grande son más grandes y en uno pequeño siguen siendo alcanzables.
+- **Modo edición** (desde el panel de trucos): los dedos mueven los botones y el joystick a
+  donde quieras; se queda así hasta cerrar la app.
+- Si se conecta un gamepad Bluetooth, ambos siguen activos.
 
 Los ajustes del juego se guardan en `save/Hurrican.cfg` y sobreviven a las actualizaciones.
+
+---
+
+## Panel de trucos y depuración (widget DBG)
+
+El botón **DBG** (arriba a la derecha) abre un panel para probar el port sin teclado:
+
+| Interruptor | Efecto |
+|---|---|
+| Vidas infinitas | no se descuenta ninguna vida al morir |
+| Munición infinita | granadas, powerlines y smart bombs siempre a 9 |
+| Armas al máximo | las cuatro armas al nivel 8 |
+| Invulnerable | `GodMode` del motor: no recibe daño |
+| Mostrar FPS | contador de fotogramas |
+| Editar controles | arrastrar botones y joystick |
+
+Los trucos **no se guardan**: duran mientras la app está abierta, para no quedarse activados sin
+querer en una partida normal. Se aplican una vez por fotograma desde `Heartbeat()`, así que
+también funcionan al cambiar de nivel.
+
+El panel **pausa el overlay**: mientras está abierto el mando virtual no mueve al personaje, y
+un toque fuera del panel lo cierra.
+
+---
+
+## Si algo va mal: cómo diagnosticar
+
+El juego escribe **todo** en `logcat`, con la etiqueta `Hurrican`, y además en
+`files/save/Game_Log.txt`. Con el móvil conectado por USB:
+
+```bash
+adb logcat -s Hurrican                       # registro del motor en vivo
+adb shell run-as org.hurrican.game cat files/save/Game_Log.txt
+```
+
+Qué buscar:
+
+| Síntoma | Qué mirar |
+|---|---|
+| Se queda en el cartel de carga | última línea del log: copia de datos, texturas o shaders |
+| Se cierra sin decir nada | `adb logcat` completo (no solo `-s Hurrican`): busca `FATAL EXCEPTION` o `SIGSEGV` |
+| Arranca sin sonido | `AVISO: no se pudo abrir el audio` (el juego sigue funcionando) |
+| Arranca sin música | `SDL_mixer no anuncia decodificador` (los `.it` necesitan libxmp) |
+| Pantalla girada o descolocada | `Android: nuevo tamano de ventana` / `Window viewport` |
+
+Durante el arranque se pinta un cartel con una barra de carga: si se queda ahí, el log dice en
+qué paso se quedó. Si un fallo impide arrancar, aparece un diálogo con las últimas líneas.
 
 ---
 
@@ -196,6 +259,22 @@ Errores del motor que afectan de verdad a Android:
 8. **`FindLanguageFiles()` lanzaba excepción** si el directorio no existía.
 9. **Si el arranque fallaba, sólo se veía una pantalla negra.** Ahora hay un diálogo con el
    motivo y las últimas líneas del log.
+10. **El log mataba la app antes de arrancar.** El objeto de log es global y abría
+    `Game_Log.txt` con ruta relativa *antes* de que existiera el directorio de guardado; en
+    Android el directorio de trabajo es `/` (no escribible), el fichero no se abría y un
+    `exit(EXIT_FAILURE)` cerraba la app nada más abrirla. Ahora se reabre en `files/save/` y,
+    si aun así falla, se registra sólo en `logcat`.
+11. **Rutas relativas heredadas del escritorio.** `temp.map` y compañía se escribían en `/`.
+    Al arrancar se hace `chdir(files/)`, así que caen dentro de la app.
+12. **Falta de audio cerraba el juego.** Si `Mix_OpenAudio` falla (otra app con el
+    dispositivo, Bluetooth a medio emparejar, emulador), el motor hacía `GameRunning = false`.
+    Ahora se juega en silencio y se avisa en el log.
+13. **Los fallos de `Heartbeat()` se ignoraban.** Si la inicialización del menú fallaba, el
+    bucle principal la reintentaba sin parar: pantalla negra fija, sin mensaje. Ahora se
+    detecta y se muestra el motivo.
+14. **Música `.it` sin comprobar el decodificador.** Si SDL_mixer no podía leer el formato, el
+    fallo acababa cerrando el juego al cargar la música del menú. Se comprueba antes y, si no
+    está, se sigue sin música.
 
 Mejoras de rendimiento:
 
