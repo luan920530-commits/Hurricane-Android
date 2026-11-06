@@ -235,8 +235,17 @@ void SoundManagerClass::Init() {
                   << std::endl;
         channels.resize(num_channels);
     } else {
-        Protokoll << "-> ERROR: Create Sound Manager failed !" << std::endl;
-        GameRunning = false;
+        /*
+         * Ojo: aqui estaba GameRunning = false. En un movil el audio puede no abrirse por
+         * muchos motivos (otra app tiene el dispositivo, un dispositivo Bluetooth a medio
+         * emparejar, el emulador sin salida de audio...). Cerrar el juego por eso dejaba al
+         * jugador con una pantalla negra y la app cerrándose, sin poder jugar en silencio.
+         * Ahora se avisa y se sigue sin sonido: todas las llamadas de SDL_mixer fallan sin
+         * hacer nada mientras el audio no este abierto.
+         */
+        Protokoll << "-> AVISO: no se pudo abrir el audio; se juega sin sonido" << std::endl;
+        num_channels = 0;
+        channels.clear();
     }
 }
 

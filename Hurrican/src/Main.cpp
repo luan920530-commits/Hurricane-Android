@@ -588,7 +588,24 @@ int main(int argc, char *argv[]) {
 
             if (!GamePaused) {
                 // Main Loop
-                Heartbeat();
+                /*
+                 * El valor de retorno importa: si GameInit2() o la carga del nivel fallan,
+                 * Heartbeat() devuelve false. Antes se ignoraba y el bucle seguia llamando a
+                 * la inicializacion una y otra vez: pantalla negra fija, sin mensaje y sin
+                 * forma de saber que pasaba (la app parecia colgada y habia que cerrarla a
+                 * mano). Ahora se avisa con el motivo.
+                 */
+                if (!Heartbeat()) {
+                    Protokoll << "\n-> ERROR: fallo la inicializacion del juego\n" << std::endl;
+                    GameRunning = false;
+#if defined(ANDROID)
+                    Protokoll.flush();
+                    Android_ShowFatalError("Hurrican no pudo arrancar",
+                                           "Fallo al inicializar el menu o el nivel.\n"
+                                           "Las ultimas lineas del registro dicen por que.");
+                    return 1;
+#endif
+                }
 
                 // Eingabegeräte updaten
                 DirectInput.UpdateTastatur();
