@@ -162,14 +162,26 @@ jobs:
             # Las anotaciones viajan con la ejecucion y se pueden consultar por API, mientras
             # que el log completo requiere otro host. Volcarlas aqui hace que el motivo del
             # fallo este disponible desde cualquier sitio.
+            #
+            # Importante: las lineas interesantes son las ULTIMAS del log (Gradle escribe
+            # "FAILURE: Build failed with an exception." al final). Buscar en todo el fichero
+            # solo devuelve las primeras tareas ejecutadas, que no dicen nada.
             echo "::group::Errores detectados"
-            grep -nE "^(FAILURE|\* What went wrong|Execution failed|> |Caused by|e: )|error:" "$RUNNER_TEMP/gradle.log" \
-              | head -n 12 \
-              | while IFS= read -r line; do
-                  safe=$(printf '%s' "$line" | tr -d '\r' | cut -c1-900)
-                  echo "::error title=Gradle::${safe}"
-                  echo "$safe"
-                done
+            last_note() {
+              safe=$(printf '%s' "$1" | tr -d '\r' | tr -s ' ' | cut -c1-900)
+              [ -n "$safe" ] || return 0
+              echo "::error title=$2::${safe}"
+              echo "$safe"
+            }
+            # GitHub limita a 10 las anotaciones de error por paso: se emiten las 6 del
+            # bloque de error y las 4 ultimas lineas del log, nada mas.
+            # 1) El bloque de error propiamente dicho, si aparece.
+            grep -A 6 -E "^FAILURE: Build failed|^\* What went wrong" "$RUNNER_TEMP/gradle.log" \
+              | tail -n 6 | while IFS= read -r l; do last_note "$l" "Gradle"; done
+            # 2) Y siempre, las ultimas lineas del log: ahi esta el mensaje del compilador o
+            #    del enlazador cuando Gradle se calla.
+            tail -n 120 "$RUNNER_TEMP/gradle.log" | grep -v '^[[:space:]]*$' | tail -n 4 \
+              | while IFS= read -r l; do last_note "$l" "Gradle (final)"; done
             echo "::endgroup::"
 
             echo "::error::Gradle fallo con codigo $status"
@@ -204,6 +216,7 @@ jobs:
         with:
           name: build-logs
           path: |
+            ${{ runner.temp }}/gradle.log
             android/**/build/outputs/logs/
             android/.gradle/**
           if-no-files-found: ignore
