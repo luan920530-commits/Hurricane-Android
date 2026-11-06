@@ -97,6 +97,12 @@ set(SDL2MIXER_MIDI OFF CACHE BOOL "" FORCE)
 set(SDL2MIXER_MOD_XMP_SHARED OFF CACHE BOOL "" FORCE)
 add_subdirectory(SDL_mixer EXCLUDE_FROM_ALL)
 
+# libxmp entra dentro de libSDL2_mixer.so (no de libmain.so) y, cuando se compila en
+# depuracion, su gancho de registro llama a __android_log_print(). Esa funcion vive en
+# liblog, que SDL enlaza para si misma pero no para sus dependencias: sin esto, el enlace
+# de SDL_mixer falla con "undefined symbol: __android_log_print".
+target_link_libraries(SDL2_mixer PRIVATE log)
+
 # ---------------------------------------------------------------------------------------
 # The game itself
 # ---------------------------------------------------------------------------------------
