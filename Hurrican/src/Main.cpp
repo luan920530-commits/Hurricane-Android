@@ -638,6 +638,17 @@ int main(int argc, char *argv[]) {
             Protokoll << "Failure! Unhandled exception\n" << str << std::endl;
             GameRunning = false;
         }
+        /*
+         * El motor lanza std::exceptions en sitios puntuales (std::stoi al leer datos de un
+         * nivel, fs::directory_iterator, etc.). Sin este catch, cualquiera de ellas termina
+         * el proceso de golpe: en Android la app se cierra sin mensaje, que es justo el
+         * sintoma que hay que evitar. Se registra el motivo y se deja que el bucle termine
+         * de forma ordenada.
+         */
+        catch (const std::exception &e) {
+            Protokoll << "Failure! std::exception: " << e.what() << std::endl;
+            GameRunning = false;
+        }
 #endif  // USE_NO_EXCEPTIONS
     }
 
