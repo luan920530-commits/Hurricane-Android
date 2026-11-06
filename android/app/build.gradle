@@ -1,0 +1,93 @@
+// ---------------------------------------------------------------------------------------
+// Hurrican para Android
+//
+// El modulo compila:
+//   - Java: la actividad de SDL (copiada de SDL 2.32, sin cambios) + HurricanActivity.
+//   - Nativo: libSDL2 / libSDL2_image (shared) y libmain.so con el motor del juego,
+//     SDL2_mixer y libxmp enlazados estaticamente.
+//
+// Todo el nativo se construye con CMake a traves del NDK que trae Android Studio; no hace
+// falta instalar dependencias del sistema.
+// ---------------------------------------------------------------------------------------
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'org.hurrican.game'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "org.hurrican.game"
+        minSdk 21          // API 21: OpenGL ES 2 + AAudio/OpenSL disponibles en todo el parque
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+
+        externalNativeBuild {
+            cmake {
+                // ARM (moviles reales) + x86_64 (emulador de escritorio).
+                // Para reducir el tamano del APK, comenta las ABI que no necesites.
+                abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64'
+
+                arguments "-DANDROID_STL=c++_shared",
+                          "-DCMAKE_BUILD_TYPE=Release"
+                cppFlags "-std=c++17", "-fexceptions", "-frtti"
+            }
+        }
+
+        // El motor trae su propio C++17; no comprimimos los assets para acelerar la primera
+        // copia de datos al almacenamiento interno.
+        ndk {
+            debugSymbolLevel 'none'
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path "src/main/jni/CMakeLists.txt"
+            version "3.22.1"
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            shrinkResources false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // Firma de depuracion: permite instalar el APK de release sin configurar claves.
+            // Para publicar en una tienda, cambia esto por tu propio keystore.
+            signingConfig signingConfigs.debug
+        }
+        debug {
+            debuggable true
+            jniDebuggable true
+        }
+    }
+
+    // Los .pkm (texturas ETC1, opcionales) ya estan comprimidos: no tiene sentido
+    // volver a comprimirlos. El resto de assets se deja con la compresion por defecto de
+    // AAPT2 para que el APK pese menos.
+    androidResources {
+        noCompress 'pkm'
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    lint {
+        abortOnError false
+    }
+}
+
+dependencies {
+    // Sin dependencias externas: SDL y el juego van dentro del binario nativo.
+}

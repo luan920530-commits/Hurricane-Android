@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    android:versionCode="1"
+    android:versionName="1.0"
+    android:installLocation="auto">
+
+    <!--
+        Hurrican se renderiza con OpenGL ES 2.0 (shaders GLSL ES 1.00 con precision
+        mediump): es el minimo que garantiza cualquier Android desde 4.3 y es el que mejor
+        funciona en GPUs antiguas y en emuladores.
+    -->
+    <uses-feature android:glEsVersion="0x00020000" android:required="true" />
+
+    <!-- Pantalla tactil: es el control principal, pero no obligatorio (se puede jugar con mando). -->
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+
+    <!-- Mandos Bluetooth / USB. -->
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+    <uses-feature android:name="android.hardware.gamepad" android:required="false" />
+    <uses-feature android:name="android.hardware.usb.host" android:required="false" />
+
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <application
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="true"
+        android:hardwareAccelerated="true"
+        android:theme="@style/AppTheme">
+
+        <!--
+            AndroidManifest no puede fijar orientacion en <application>; se hace en cada
+            activity. screenOrientation="sensorLandscape" permite las dos posiciones
+            horizontales (el juego es 4:3 y se escala con bandas laterales).
+        -->
+        <activity
+            android:name="org.hurrican.game.HurricanActivity"
+            android:label="@string/app_name"
+            android:alwaysRetainTaskState="true"
+            android:launchMode="singleInstance"
+            android:screenOrientation="sensorLandscape"
+            android:resizeableActivity="false"
+            android:preferMinimalPostProcessing="true"
+            android:configChanges="layoutDirection|locale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation|density"
+            android:exported="true">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- Soporte de mandos USB que se conectan en caliente. -->
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+        </activity>
+
+        <!--
+            SDL manda estos ajustes al motor. Evita que Android convierta el acelerometro en
+            un joystick virtual (molestaria al mando tactil) y activa el audio de baja
+            latencia cuando esta disponible.
+        -->
+        <meta-data android:name="SDL_ENV.SDL_ACCELEROMETER_AS_JOYSTICK" android:value="0" />
+        <meta-data android:name="SDL_ENV.SDL_ANDROID_BLOCK_ON_PAUSE" android:value="0" />
+    </application>
+
+</manifest>

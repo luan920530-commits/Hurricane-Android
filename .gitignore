@@ -1,0 +1,30 @@
+# --- Android / Gradle ---
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/.cxx/
+android/captures/
+*.iml
+*.apk
+*.aab
+*.hprof
+
+# --- Objetos nativos ---
+*.o
+*.a
+*.so
+!android/app/src/main/jni/SDL/android-project/**/*.so
+
+# --- Ficheros generados por el juego ---
+Game_Log.txt
+Hurrican.cfg
+Hurrican.hsl
+Savegame*
+*hurrican-save*
+
+# --- Editor / SO ---
+.vscode/
+.DS_Store
+Thumbs.db

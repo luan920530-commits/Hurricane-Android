@@ -1,0 +1,8 @@
+// Build script raiz. Solo declara el plugin de Android: todas las versiones viven aqui.
+plugins {
+    id 'com.android.application' version '8.5.2' apply false
+}
+
+tasks.register('clean', Delete) {
+    delete rootProject.layout.buildDirectory
+}
