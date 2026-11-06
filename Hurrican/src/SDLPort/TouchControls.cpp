@@ -1,10 +1,9 @@
 /**
  * Implementacion del mando virtual de Android. Vease TouchControls.hpp.
  *
- * Nota sobre el estado de las teclas: el motor guarda las pulsaciones en la tabla que
- * devuelve SDL_GetKeyboardState(), que es de solo lectura para nosotros. Por eso en Android
- * DirectInputClass mantiene su propio buffer (DirectInputClass::TouchKeyboard) y
- * TastaturPuffer apunta a el; aqui solo se marca/desmarca ese buffer.
+ * Nota sobre el estado de las teclas: DirectInputClass mantiene en Android un buffer propio
+ * para eventos virtuales de menus. En juego, las acciones tactiles tambien se consultan
+ * directamente, sin depender del perfil de entrada guardado.
  *
  * (c) 2026 - Port de Android, misma licencia que el resto del codigo (MIT).
  **/
@@ -81,7 +80,7 @@ const ActionDef ACTIONS[] = {
     {0.105f, 0.105f, 0.043f, SDLK_RSHIFT, false},     // ACT_SMARTBOMB ZL
     {0.105f, 0.230f, 0.043f, SDLK_RETURN, false},     // ACT_WEAPON L
     {0.975f, 0.035f, 0.030f, SDLK_ESCAPE, false},     // ACT_ESCAPE pausa
-    {0.965f, 0.805f, 0.034f, 0, true},                // ACT_DEBUG ojo
+    {0.975f, 0.940f, 0.028f, 0, true},                // ACT_DEBUG / boton GM
     {0.930f, 0.105f, 0.043f, SDLK_RSHIFT, false},     // ACT_ZR: alternativa de bomba inteligente
     {0.445f, 0.715f, 0.032f, SDLK_ESCAPE, false},      // ACT_MINUS: pausa alternativa
     {0.590f, 0.715f, 0.032f, SDLK_RETURN, false},      // ACT_PLUS: cambio de arma alternativo
@@ -196,6 +195,7 @@ void TouchControlsClass::Init() {
     active = available && enabled;
     g_initialised = true;
     editing = false;
+    fingers.clear();
     stick_active = false;
     stick_finger = -1;
     right_stick_active = false;
@@ -221,6 +221,71 @@ void TouchControlsClass::SetEnabled(bool value) {
         ClearKeys();
 }
 
+void TouchControlsClass::HandleTouchEvent(const SDL_TouchFingerEvent &event) {
+    if (!g_initialised || !active)
+        return;
+
+    if (editing) {
+        const SDL_Rect area{0, 0, window_w, window_h};
+        if (window_w > 0 && window_h > 0)
+            UpdateEditing(event, area, window_w, window_h);
+        return;
+    }
+
+    const auto same_finger = [&](const FingerState &finger) {
+        return finger.touch_id == event.touchId && finger.id == event.fingerId;
+    };
+    auto found = std::find_if(fingers.begin(), fingers.end(), same_finger);
+
+    if (event.type == SDL_FINGERUP) {
+        if (found != fingers.end())
+            fingers.erase(found);
+        return;
+    }
+
+    if (found == fingers.end()) {
+        fingers.push_back(FingerState{event.touchId, event.fingerId, event.x, event.y});
+    } else {
+        found->x = event.x;
+        found->y = event.y;
+    }
+}
+
+void TouchControlsClass::CancelTouches() {
+    fingers.clear();
+    ClearKeys();
+}
+
+bool TouchControlsClass::IsActionPressed(VirtualAction action) const {
+    if (!g_initialised || !active)
+        return false;
+
+    const float deadzone = stick_radius * STICK_DEADZONE;
+    const bool stick_left = stick_active && stick_x < -deadzone;
+    const bool stick_right = stick_active && stick_x > deadzone;
+    const bool stick_up = stick_active && stick_y < -deadzone;
+    const bool stick_down = stick_active && stick_y > deadzone;
+    const float aim_deadzone = static_cast<float>(window_h) * 0.105f * 0.28f;
+    const bool aim_up = right_stick_active && right_stick_y < -aim_deadzone;
+    const bool aim_down = right_stick_active && right_stick_y > aim_deadzone;
+
+    switch (action) {
+        case VirtualAction::MOVE_LEFT: return dpad_pressed[0] || stick_left;
+        case VirtualAction::MOVE_RIGHT: return dpad_pressed[1] || stick_right;
+        case VirtualAction::DUCK: return dpad_pressed[3] || stick_down;
+        case VirtualAction::LOOK_UP: return dpad_pressed[2] || stick_up || aim_up;
+        case VirtualAction::LOOK_DOWN: return dpad_pressed[3] || stick_down || aim_down;
+        case VirtualAction::JUMP: return actions[ACT_JUMP].pressed;
+        case VirtualAction::FIRE: return actions[ACT_FIRE].pressed || right_stick_active;
+        case VirtualAction::BLITZ: return actions[ACT_BLITZ].pressed;
+        case VirtualAction::POWERLINE: return actions[ACT_POWERLINE].pressed;
+        case VirtualAction::GRENADE: return actions[ACT_GRENADE].pressed;
+        case VirtualAction::SMARTBOMB: return actions[ACT_SMARTBOMB].pressed || actions[ACT_ZR].pressed;
+        case VirtualAction::CYCLE_WEAPON: return actions[ACT_WEAPON].pressed || actions[ACT_PLUS].pressed;
+    }
+    return false;
+}
+
 void TouchControlsClass::ToggleEditing() {
     editing = !editing;
     ClearKeys();
@@ -240,6 +305,7 @@ void TouchControlsClass::ResetLayout() {
 }
 
 void TouchControlsClass::ClearKeys() {
+    fingers.clear();
     if (TastaturPuffer != nullptr) {
         for (auto sc : pressed_scancodes) {
             if (sc > 0 && sc < MAX_KEYS)
@@ -392,10 +458,6 @@ void TouchControlsClass::Update(const SDL_Rect &screen_rect, int win_w, int win_
         }
     };
 
-    // Android usa el id 0 para el touchscreen. No debe tratarse como "sin dispositivo".
-    const int touch_device_count = SDL_GetNumTouchDevices();
-    const SDL_TouchID device = touch_device_count > 0 ? SDL_GetTouchDevice(0) : 0;
-    const int fingers_count = touch_device_count > 0 ? std::max(0, SDL_GetNumTouchFingers(device)) : 0;
     const float h = static_cast<float>(win_h);
     const float dpad_cx = screen_rect.x + DPAD_X * screen_rect.w;
     const float dpad_cy = screen_rect.y + DPAD_Y * screen_rect.h;
@@ -405,14 +467,11 @@ void TouchControlsClass::Update(const SDL_Rect &screen_rect, int win_w, int win_
     const float right_cy = screen_rect.y + RIGHT_STICK_Y * screen_rect.h;
     const float right_radius = 0.105f * h;
 
-    // Un dedo controla cada joystick; el d-pad y los botones admiten multitouch simultaneo.
-    for (int i = 0; i < fingers_count; i++) {
-        SDL_Finger *finger = SDL_GetTouchFinger(device, i);
-        if (finger == nullptr)
-            continue;
-
-        const float px = finger->x * static_cast<float>(win_w);
-        const float py = finger->y * static_cast<float>(win_h);
+    // Los eventos SDL preservan los contactos completos, incluido el movimiento, y el
+    // vector mantiene dedos simultaneos aunque SDL no exponga un dispositivo de touch.
+    for (const FingerState &finger : fingers) {
+        const float px = finger.x * static_cast<float>(win_w);
+        const float py = finger.y * static_cast<float>(win_h);
         if (px < screen_rect.x || py < screen_rect.y || px > screen_rect.x + screen_rect.w ||
             py > screen_rect.y + screen_rect.h)
             continue;
@@ -421,7 +480,7 @@ void TouchControlsClass::Update(const SDL_Rect &screen_rect, int win_w, int win_
         const float ny = (py - screen_rect.y) / static_cast<float>(screen_rect.h);
 
         // Una vez iniciado, el stick sigue al mismo dedo aunque cruce otras zonas.
-        if (stick_active && stick_finger == finger->id) {
+        if (stick_active && stick_finger == finger.id) {
             stick_finger_seen = true;
             float dx = px - stick_origin_x;
             float dy = py - stick_origin_y;
@@ -505,7 +564,7 @@ void TouchControlsClass::Update(const SDL_Rect &screen_rect, int win_w, int win_
         if (in_zone || on_drawn_stick) {
             if (!stick_active) {
                 stick_active = true;
-                stick_finger = finger->id;
+                stick_finger = finger.id;
                 if (on_drawn_stick) {
                     stick_origin_x = screen_rect.x + stick_default_x * screen_rect.w;
                     stick_origin_y = screen_rect.y + stick_default_y * screen_rect.h;

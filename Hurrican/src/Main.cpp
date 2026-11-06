@@ -504,6 +504,7 @@ int main(int argc, char *argv[]) {
                  */
                 case SDL_APP_WILLENTERBACKGROUND:
                     Protokoll << "Android: la app pasa a segundo plano, en pausa" << std::endl;
+                    TouchControls.CancelTouches();
                     GamePaused = true;
                     SoundManager.PauseSongs();
                     SoundManager.PauseSounds();
@@ -526,34 +527,46 @@ int main(int argc, char *argv[]) {
 #endif
 #if defined(ANDROID)
                 /*
-                 * Toques para el panel de depuracion.
-                 *
-                 * Se procesan aqui, antes que el mando virtual, para que mientras el panel
-                 * esta abierto el jugador no mueva al personaje sin querer. El dedo se pasa
-                 * en coordenadas normalizadas de ventana, que es lo que da SDL.
+                 * Enrutar el ciclo completo de cada dedo (bajada, movimiento y subida).
+                 * El panel de depuracion tiene prioridad y consume los toques mientras esta
+                 * abierto; los demas se entregan al mando multitactil.
                  */
-                case SDL_FINGERDOWN:
-                case SDL_FINGERUP: {
-                    const bool down = (event.type == SDL_FINGERDOWN);
-                    if (down && DebugPanel.IsOpen()) {
+                case SDL_FINGERDOWN: {
+                    if (DebugPanel.IsOpen()) {
                         DebugPanel.HandleTouch(event.tfinger.x, event.tfinger.y, true,
                                                DirectGraphics.GetRenderRect());
                         DebugPanelOpenBlock = true;
-                    } else if (!down && DebugPanelOpenBlock) {
-                        DebugPanel.HandleTouch(event.tfinger.x, event.tfinger.y, false,
-                                               DirectGraphics.GetRenderRect());
-                        DebugPanelOpenBlock = false;
-                    } else if (down) {
-                        // Panel cerrado: un toque en el boton DBG lo abre.
+                        TouchControls.CancelTouches();
+                    } else {
                         const float px = event.tfinger.x * static_cast<float>(DirectGraphics.GetWindowWidth());
                         const float py = event.tfinger.y * static_cast<float>(DirectGraphics.GetWindowHeight());
                         const SDL_Rect touch_area{0, 0, DirectGraphics.GetWindowWidth(),
                                                   DirectGraphics.GetWindowHeight()};
-                        if (TouchControls.HitDebugButton(px, py, touch_area))
+                        if (TouchControls.HitDebugButton(px, py, touch_area)) {
                             DebugPanel.SetOpen(true);
+                            DebugPanelOpenBlock = true;
+                            TouchControls.CancelTouches();
+                        } else {
+                            TouchControls.HandleTouchEvent(event.tfinger);
+                        }
                     }
                     break;
                 }
+                case SDL_FINGERMOTION:
+                    if (!DebugPanelOpenBlock && !DebugPanel.IsOpen())
+                        TouchControls.HandleTouchEvent(event.tfinger);
+                    break;
+                case SDL_FINGERUP:
+                    if (DebugPanelOpenBlock) {
+                        if (DebugPanel.IsOpen())
+                            DebugPanel.HandleTouch(event.tfinger.x, event.tfinger.y, false,
+                                                   DirectGraphics.GetRenderRect());
+                        DebugPanelOpenBlock = false;
+                        TouchControls.CancelTouches();
+                    } else {
+                        TouchControls.HandleTouchEvent(event.tfinger);
+                    }
+                    break;
                 case SDL_WINDOWEVENT:
                     if (event.window.event == SDL_WINDOWEVENT_RESIZED ||
                         event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {

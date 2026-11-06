@@ -1,10 +1,9 @@
 /**
  * Controles tactiles de Android - mando virtual.
  *
- * Hurrican solo consulta teclado: la logica del jugador lee KeyDown(DIK_...). En lugar de
- * reescribir el motor, este modulo dibuja un mando en pantalla y escribe en el mismo buffer
- * de teclas que consulta el juego (DirectInputClass::TouchKeyboard). Asi el juego se comporta
- * exactamente igual que con teclado.
+ * Hurrican lee las acciones configuradas por el jugador y el mando las alimenta directamente,
+ * sin depender de que el perfil activo sea teclado o joystick. Tambien escribe las teclas
+ * virtuales en TouchKeyboard para conservar su compatibilidad con menus y pantallas.
  *
  * DISPOSICION inspirada en un mando clasico de pantalla: d-pad y stick L a la izquierda,
  * cuatro botones A/B/X/Y y stick R a la derecha, hombros ZL/L/ZR/R, pausa y +/-.
@@ -34,8 +33,16 @@
  */
 class TouchControlsClass {
   public:
+    enum class VirtualAction {
+        MOVE_LEFT, MOVE_RIGHT, DUCK, LOOK_UP, LOOK_DOWN,
+        JUMP, FIRE, BLITZ, POWERLINE, GRENADE, SMARTBOMB, CYCLE_WEAPON
+    };
+
     void Init();                     ///< Lee la deteccion de pantalla tactil y ajustes
     void Shutdown();                 ///< Libera el estado
+    void HandleTouchEvent(const SDL_TouchFingerEvent &event);
+    void CancelTouches();
+    bool IsActionPressed(VirtualAction action) const;
     void Update(const SDL_Rect &screen_rect, int window_w, int window_h);
     void DrawGeometry(const SDL_Rect &screen_rect);
 
@@ -146,6 +153,7 @@ class TouchControlsClass {
     float drag_off_y = 0.0f;
     /// Ultima posicion conocida de cada dedo, para detectar arrastres.
     struct FingerState {
+        SDL_TouchID touch_id;
         SDL_FingerID id;
         float x, y;
     };

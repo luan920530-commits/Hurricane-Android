@@ -17,6 +17,7 @@
 #include "Player.hpp"
 #if defined(ANDROID)
 #  include "SDLPort/DebugPanel.hpp"
+#  include "SDLPort/TouchControls.hpp"
 #endif
 #include <stdio.h>
 #include <algorithm>
@@ -671,6 +672,26 @@ bool PlayerClass::GetPlayerInput() {
                     }
                 }
             }
+
+#if defined(ANDROID)
+            // Der virtuelle Controller wirkt direkt auf die Spielaktionen, unabhaengig
+            // davon, ob die gespeicherte Steuerung auf Tastatur oder Joystick steht.
+            if (PlayerNumber == 0) {
+                using TouchAction = TouchControlsClass::VirtualAction;
+                if (TouchControls.IsActionPressed(TouchAction::MOVE_LEFT)) Aktion[AKTION_LINKS] = true;
+                if (TouchControls.IsActionPressed(TouchAction::MOVE_RIGHT)) Aktion[AKTION_RECHTS] = true;
+                if (TouchControls.IsActionPressed(TouchAction::DUCK)) Aktion[AKTION_DUCKEN] = true;
+                if (TouchControls.IsActionPressed(TouchAction::LOOK_UP)) Aktion[AKTION_OBEN] = true;
+                if (TouchControls.IsActionPressed(TouchAction::LOOK_DOWN)) Aktion[AKTION_UNTEN] = true;
+                if (TouchControls.IsActionPressed(TouchAction::JUMP)) Aktion[AKTION_JUMP] = true;
+                if (TouchControls.IsActionPressed(TouchAction::FIRE)) Aktion[AKTION_SHOOT] = true;
+                if (TouchControls.IsActionPressed(TouchAction::BLITZ)) Aktion[AKTION_BLITZ] = true;
+                if (TouchControls.IsActionPressed(TouchAction::POWERLINE)) Aktion[AKTION_POWERLINE] = true;
+                if (TouchControls.IsActionPressed(TouchAction::GRENADE)) Aktion[AKTION_GRANATE] = true;
+                if (TouchControls.IsActionPressed(TouchAction::SMARTBOMB)) Aktion[AKTION_SMARTBOMB] = true;
+                if (TouchControls.IsActionPressed(TouchAction::CYCLE_WEAPON)) Aktion[AKTION_WAFFEN_CYCLE] = true;
+            }
+#endif
 
             // Bewegungen aufnehmen ?
             if (DEMORecording)
