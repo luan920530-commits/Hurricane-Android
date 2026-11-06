@@ -60,6 +60,11 @@ add_subdirectory(SDL_image EXCLUDE_FROM_ALL)
 # libxmp: Impulse Tracker replay. Hurrican ships all of its music as .it modules, so this
 # is mandatory (SDL_mixer's own mikmod is not available in SDL2_mixer 2.x).
 # ---------------------------------------------------------------------------------------
+#
+# Quien lo anade al proyecto es SDL_mixer (add_subdirectory), no este fichero: en modo
+# "vendored" busca el proyecto en SDL_mixer/external/libxmp, o sea que el arbol de libxmp
+# vive ahi. Estas variables tienen que estar puestas antes de add_subdirectory(SDL_mixer),
+# que es donde se procesa.
 set(BUILD_SHARED OFF CACHE BOOL "" FORCE)
 set(BUILD_STATIC ON CACHE BOOL "" FORCE)
 set(LIBXMP_PIC ON CACHE BOOL "" FORCE)
@@ -67,10 +72,6 @@ set(LIBXMP_DISABLE_DEPACKERS OFF CACHE BOOL "" FORCE)
 set(LIBXMP_DISABLE_PROWIZARD ON CACHE BOOL "" FORCE)
 set(WITH_UNIT_TESTS OFF CACHE BOOL "" FORCE)
 
-# Se coloca en external/libxmp porque es exactamente donde SDL_mixer lo busca cuando
-# compila en modo "vendored". Asi SDL_mixer lo anade el solo y no dependemos de que
-# find_package(libxmp) encuentre un paquete instalado, que en Android no existe.
-add_subdirectory(external/libxmp EXCLUDE_FROM_ALL)
 
 # ---------------------------------------------------------------------------------------
 # SDL2_mixer (static, linked into libmain.so together with libxmp)

@@ -162,7 +162,12 @@ endif()
 
 
 # === Documentation ====
-add_subdirectory(docs)
+# El arbol que se trajo al repositorio no incluye docs/ (solo el codigo que hace falta
+# para compilar), asi que la entrada solo se procesa si existe; igual que se hace arriba
+# con examples/.
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/docs/CMakeLists.txt")
+    add_subdirectory(docs)
+endif()
 
 
 # === Install ====
