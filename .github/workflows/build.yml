@@ -142,12 +142,25 @@ jobs:
           ABI: ${{ github.event.inputs.abi || 'arm64-v8a,armeabi-v7a' }}
           BUILD_TYPE: ${{ github.event.inputs.build_type || 'debug' }}
         run: |
-          set -e
+          set +e
           # La ABI se pasa como propiedad de Gradle (-Pabi=...) y app/build.gradle la usa si
           # esta definida; si no, se queda con la lista por defecto.
-          gradle --no-daemon --stacktrace \
+          #
+          # La salida se guarda y se vuelca al final del paso, en la parte del log que GitHub
+          # muestra con la linea del error. Asi el motivo real queda visible sin tener que
+          # abrir el log completo.
+          gradle --no-daemon --console=plain --stacktrace \
                  -Pabi="$ABI" \
-                 "assemble$(echo ${BUILD_TYPE^})"
+                 "assemble$(echo ${BUILD_TYPE^})" 2>&1 | tee "$RUNNER_TEMP/gradle.log"
+
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            echo "::group::Ultimas 200 lineas de la compilacion"
+            tail -n 200 "$RUNNER_TEMP/gradle.log"
+            echo "::endgroup::"
+            echo "::error::Gradle fallo con codigo $status"
+            exit "$status"
+          fi
 
       - name: Localizar la APK
         id: locate
