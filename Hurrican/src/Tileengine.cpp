@@ -331,8 +331,17 @@ bool TileEngineClass::LoadLevel(const std::string &Filename) {
     if (fs::exists(Temp) && fs::is_regular_file(Temp))
         goto loadfile;
 
+    /*
+     * Port de Android: antes se ponia GameRunning = false y se salia, de modo que un nivel que
+     * no se encontraba cerraba la aplicacion (pantalla negra y fuera). Se sigue devolviendo
+     * false para que Gameplay() pueda elegir otro nivel, pero se deja el motivo en el registro:
+     * el motor reacciona con "-> Error loading level" en Gameplay.cpp.
+     */
     Protokoll << "\n-> Error loading level " << Filename << "!" << std::endl;
+    Protokoll << "   Ruta buscada: " << g_storage_ext << "/data/levels/" << Filename << std::endl;
+#if !defined(ANDROID)
     GameRunning = false;
+#endif
     return false;
 
 loadfile:

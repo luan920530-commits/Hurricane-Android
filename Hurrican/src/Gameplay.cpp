@@ -13,6 +13,7 @@
 // --------------------------------------------------------------------------------------
 
 #include "Gameplay.hpp"
+#include <SDL.h>
 #include <stdio.h>
 #include "Console.hpp"
 #include "DX8Font.hpp"
@@ -189,12 +190,25 @@ void InitNewGameLevel() {
 
         // DKS - FadeSong above will stop the song once fade is complete, with its false parameter (last one)
         // while (SoundManager.its_Songs[MUSIC::MENU]->FadingVolume != 0.0f)
+        /*
+         * Port de Android: este bucle esperaba sin limite a que la musica del menu terminara
+         * de fundirse. Si el audio no arranca (o el canal no informa de que ha parado), la
+         * espera no termina nunca: la app se queda en negro antes de entrar al nivel y hay
+         * que matarla. Se pone un tope de 3 segundos; en escritorio el fundido dura menos.
+         */
+        const Uint32 fade_deadline = SDL_GetTicks() + 3000;
         while (SoundManager.SongIsPlaying(MUSIC::MENU)) {
             // Timer updaten
             Timer.update();
             Timer.wait();
 
             SoundManager.Update();
+
+            if (SDL_GetTicks() > fade_deadline) {
+                Protokoll << "-> AVISO: el fundido de la musica del menu no termino; se continua"
+                          << std::endl;
+                break;
+            }
         }
     }
 
