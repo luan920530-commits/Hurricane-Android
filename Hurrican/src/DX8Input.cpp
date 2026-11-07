@@ -262,10 +262,22 @@ bool DirectInputClass::AreAllKeysReleased() const {
 // --------------------------------------------------------------------------------------
 
 bool DirectInputClass::AnyKeyDown() const {
-    for (int i = 0; i < std::min(NumberOfKeys, MAX_KEYS); i++)
+#if SDL_VERSION_ATLEAST(2, 0, 0)
+    // SDL2 expone el teclado indexado por SDL_Scancode. En Android el mando virtual escribe
+    // directamente en ese mismo buffer; tratar el indice como SDLK con KeyDown(i) ignora
+    // teclas como Ctrl/Alt y, por tanto, no deja salir de la pantalla de fin de nivel.
+    if (TastaturPuffer == nullptr)
+        return false;
+    for (int scancode = 0; scancode < std::min(NumberOfKeys, MAX_KEYS); ++scancode) {
+        if (TastaturPuffer[scancode] != 0)
+            return true;
+    }
+#else
+    for (int i = 0; i < std::min(NumberOfKeys, MAX_KEYS); ++i) {
         if (KeyDown(i))
             return true;
-
+    }
+#endif
     return false;
 }
 
