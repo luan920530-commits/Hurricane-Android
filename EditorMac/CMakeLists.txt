@@ -1,9 +1,11 @@
 cmake_minimum_required(VERSION 3.24)
+
+# Set Apple target properties before enabling C++/Objective-C++ compilers.
+set(CMAKE_OSX_ARCHITECTURES "x86_64" CACHE STRING "Build Intel macOS application")
+set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "Minimum macOS version")
 project(HurricanMapEditor VERSION 0.1.0 LANGUAGES CXX OBJCXX)
 
 # First native target is Intel-only as requested and runs on macOS Monterey 12 or later.
-set(CMAKE_OSX_ARCHITECTURES "x86_64" CACHE STRING "Build Intel macOS application")
-set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "Minimum macOS version")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
