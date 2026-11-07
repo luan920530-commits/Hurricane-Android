@@ -20,14 +20,15 @@ MIN_FICHEROS_DATOS = 600
 MIN_FICHEROS_IDIOMA = 5
 MIN_BYTES_ASSETS = 60 * 1024 * 1024
 ICONOS_TACTILES = (
-    "touch_weapon.png",
+    "touch_arma_v2.png",
+    "touch_salto_v2.png",
+    "touch_fuego_v2.png",
+    "touch_granada_v2.png",
+    "touch_bomba_v2.png",
+    "touch_pausa_v2.png",
+    "touch_ajustes_v2.png",
     "touch_powerline.png",
     "touch_blitz.png",
-    "touch_grenade.png",
-    "touch_fire.png",
-    "touch_jump.png",
-    "touch_pause.png",
-    "touch_settings.png",
 )
 
 

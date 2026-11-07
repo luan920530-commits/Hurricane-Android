@@ -100,7 +100,7 @@ jobs:
             echo "::error::Quedó una referencia visible a Poke53280 en los textos distribuidos"
             exit 1
           fi
-          for icon in touch_weapon.png touch_powerline.png touch_blitz.png touch_grenade.png touch_fire.png touch_jump.png touch_pause.png touch_settings.png; do
+          for icon in touch_arma_v2.png touch_salto_v2.png touch_fuego_v2.png touch_granada_v2.png touch_bomba_v2.png touch_pausa_v2.png touch_ajustes_v2.png touch_powerline.png touch_blitz.png; do
             if [ ! -s "Hurrican/data/textures/$icon" ]; then
               echo "::error::Falta el icono táctil Hurrican/data/textures/$icon"
               exit 1

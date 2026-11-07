@@ -78,8 +78,8 @@ const ActionDef ACTIONS[] = {
 
 constexpr int ACTION_COUNT = sizeof(ACTIONS) / sizeof(ACTIONS[0]);
 
-// Iconos cargados desde data/textures. La bomba inteligente no tiene PNG nuevo; se usa
-// el primer fotograma del spritesheet de bomba que ya trae el juego.
+// Iconos cargados desde data/textures. Se usan las versiones v2 proporcionadas para las
+// acciones disponibles; Blitz y Powerline conservan sus iconos previos porque no se subio v2.
 struct ActionIconDef {
     const char *filename;
     uint16_t texture_w, texture_h;
@@ -88,15 +88,15 @@ struct ActionIconDef {
 };
 
 const ActionIconDef ACTION_ICONS[ACTION_COUNT] = {
-    {"touch_jump.png", 166, 169, 166, 169, 1, 1},       // salto
-    {"touch_fire.png", 164, 168, 164, 168, 1, 1},       // disparo
-    {"touch_blitz.png", 166, 170, 166, 170, 1, 1},     // Blitz
-    {"touch_powerline.png", 166, 169, 166, 169, 1, 1}, // rayo / Powerline
-    {"touch_grenade.png", 168, 170, 168, 170, 1, 1},   // granada
-    {"bombe_big.png", 192, 48, 32, 24, 6, 2},          // bomba inteligente
-    {"touch_weapon.png", 166, 169, 166, 169, 1, 1},    // cambiar arma
-    {"touch_pause.png", 162, 162, 162, 162, 1, 1},     // pausa
-    {"touch_settings.png", 165, 170, 165, 170, 1, 1},  // ajustes
+    {"touch_salto_v2.png", 181, 177, 181, 177, 1, 1},     // salto
+    {"touch_fuego_v2.png", 179, 180, 179, 180, 1, 1},     // disparo
+    {"touch_blitz.png", 166, 170, 166, 170, 1, 1},        // Blitz (sin v2)
+    {"touch_powerline.png", 166, 169, 166, 169, 1, 1},    // rayo / Powerline (sin v2)
+    {"touch_granada_v2.png", 175, 172, 175, 172, 1, 1},   // granada
+    {"touch_bomba_v2.png", 177, 174, 177, 174, 1, 1},     // bomba inteligente
+    {"touch_arma_v2.png", 178, 179, 178, 179, 1, 1},      // cambiar arma
+    {"touch_pausa_v2.png", 167, 166, 167, 166, 1, 1},    // pausa
+    {"touch_ajustes_v2.png", 180, 176, 180, 176, 1, 1},  // ajustes
 };
 
 DirectGraphicsSprite g_action_icons[ACTION_COUNT];

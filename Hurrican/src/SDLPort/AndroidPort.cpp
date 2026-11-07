@@ -50,9 +50,9 @@ namespace fs = std::filesystem;
 namespace {
 
 /// Subir este numero cada vez que cambien los datos empaquetados en assets/ o la forma de
-/// copiarlos. La version 2 introdujo el indice para copiar subdirectorios; la version 3
-/// incorporo los iconos tactiles y la version 4 actualiza textos/creditos visibles del juego.
-constexpr const char *ANDROID_ASSET_VERSION = "4";
+/// copiarlos. La version 4 actualizo los textos/creditos y la version 5 cambia los iconos
+/// tactiles a los recursos v2 proporcionados.
+constexpr const char *ANDROID_ASSET_VERSION = "5";
 
 constexpr const char *LOG_TAG = "Hurrican";
 
