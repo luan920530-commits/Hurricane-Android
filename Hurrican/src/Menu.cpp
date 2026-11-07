@@ -35,6 +35,9 @@
 #include "Menu.hpp"
 #include "Partikelsystem.hpp"
 #include "Player.hpp"
+#if defined(ANDROID)
+#  include "SDLPort/TouchControls.hpp"
+#endif
 #include "Timer.hpp"
 
 // Farben für die Highscore erstellen, in der die Namen aufblinken
@@ -1264,8 +1267,12 @@ void MenuClass::DoMenu() {
                 AktuellerPunkt = MENUPUNKT_CONTINUEGAME;
                 selected = true;
 
+#if defined(ANDROID)
+                TouchControls.CancelTouches();
+#else
                 while (DirectInput.AreAllKeysReleased() == false)
                     DirectInput.UpdateTastatur();
+#endif
             }
 
             if (AktuellerPunkt < MENUPUNKT_STARTGAME)

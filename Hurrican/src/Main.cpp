@@ -1277,6 +1277,12 @@ void StartOuttro() {
 //----------------------------------------------------------------------------
 
 void StartIntro() {
+#if defined(ANDROID)
+    // El toque que confirma la dificultad no debe quedar retenido en el intro. Su
+    // constructor espera teclas liberadas; descartar aquí los contactos virtuales evita
+    // bloquear el arranque del juego cuando Android aún no entrega FINGERUP.
+    TouchControls.CancelTouches();
+#endif
     pMenu->StartProgressBar(12);
 
     pIntro = new IntroClass();

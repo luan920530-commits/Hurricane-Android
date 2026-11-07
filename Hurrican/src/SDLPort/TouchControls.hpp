@@ -5,11 +5,11 @@
  * sin depender de que el perfil activo sea teclado o joystick. Tambien escribe las teclas
  * virtuales en TouchKeyboard para conservar su compatibilidad con menus y pantallas.
  *
- * DISPOSICION restaurada: stick grande a la izquierda; botones con texto PAUSA, DBG,
- * BOMBA, GRANADA, RAYO, BLITZ, ARMA, FUEGO y SALTO, como en la captura del usuario.
- * Las posiciones se anclan a la ventana completa; el juego conserva su area 4:3 centrada.
+ * DISPOSICION de la captura: cruceta a la izquierda e iconos de pausa, ajustes, bomba,
+ * granada, rayo, blitz, pistola, fuego y salto. Las posiciones usan toda la ventana mientras
+ * el juego conserva su area 4:3 centrada.
  *
- *  - Stick y botones admiten multitouch para moverse y ejecutar habilidades a la vez.
+ *  - Cruceta/stick flotante y botones admiten multitouch para moverse y actuar a la vez.
  *  - Las acciones mantienen sus teclas de juego y tambien se aplican directamente al jugador.
  *  - DBG abre el panel de depuracion; el overlay puede ocultarse desde las opciones.
  *  - Modo edicion y restauracion de la disposicion permanecen disponibles.
@@ -103,7 +103,6 @@ class TouchControlsClass {
         float x, y;          ///< centro, normalizado (0..1) respecto a la ventana completa
         float r;             ///< radio, normalizado respecto a la ALTURA de la pantalla
         int scancode;        ///< tecla que se pulsa al tocarlo
-        const char *label;   ///< etiqueta visible, como en el mando original
         bool is_toggle;      ///< no escribe tecla cada frame, solo avisa al pulsar
         bool pressed;
         int finger;          ///< dedo que lo esta pulsando (-1 = ninguno)
@@ -132,7 +131,8 @@ class TouchControlsClass {
     float stick_origin_y = 0.0f;
     float stick_x = 0.0f;  ///< desplazamiento actual del pomo (pixeles)
     float stick_y = 0.0f;
-    float stick_radius = 0.0f;  ///< radio en pixeles (depende de la pantalla)
+    float stick_radius = 0.0f;  ///< zona analógica flotante, en pixeles
+    bool dpad_pressed[4] = {false, false, false, false};
     /// Zona izquierda donde puede nacer el joystick flotante, normalizada.
     float stick_zone_w = 0.42f;
 

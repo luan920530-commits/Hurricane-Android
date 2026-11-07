@@ -56,25 +56,23 @@ struct ActionDef {
     float x, y;    // centro, normalizado con respecto a la ventana completa
     float r;       // radio, normalizado respecto a la altura de la pantalla
     SDL_Keycode key;
-    const char *label;
     bool toggle;
 };
 
 /*
- * Distribucion del mando tactil anterior, que el usuario confirma que ya respondia bien.
- * Las anclas usan toda la pantalla: los controles quedan en los laterales y sobre el juego,
- * tal como en la captura, aunque el area de juego conserve su proporcion 4:3.
+ * Mantener las anclas del mando que ya funcionaba; cambiar solo las letras por los
+ * pictogramas de la segunda referencia. Las coordenadas usan la ventana completa.
  */
 const ActionDef ACTIONS[] = {
-    {0.921f, 0.800f, 0.095f, SDLK_LALT, "SALTO", false},       // ACT_JUMP
-    {0.766f, 0.849f, 0.098f, SDLK_LCTRL, "FUEGO", false},      // ACT_FIRE
-    {0.919f, 0.580f, 0.070f, SDLK_LSHIFT, "BLITZ", false},     // ACT_BLITZ
-    {0.804f, 0.580f, 0.070f, SDLK_SPACE, "RAYO", false},      // ACT_POWERLINE
-    {0.684f, 0.581f, 0.071f, SDLK_RCTRL, "GRANADA", false},   // ACT_GRENADE
-    {0.583f, 0.578f, 0.071f, SDLK_RSHIFT, "BOMBA", false},    // ACT_SMARTBOMB
-    {0.583f, 0.826f, 0.062f, SDLK_RETURN, "ARMA", false},     // ACT_WEAPON
-    {0.052f, 0.070f, 0.060f, SDLK_ESCAPE, "PAUSA", false},    // ACT_ESCAPE
-    {0.969f, 0.070f, 0.060f, 0, "DBG", true},                 // ACT_DEBUG
+    {0.921f, 0.800f, 0.095f, SDLK_LALT, false},       // ACT_JUMP
+    {0.766f, 0.849f, 0.098f, SDLK_LCTRL, false},      // ACT_FIRE
+    {0.919f, 0.580f, 0.070f, SDLK_LSHIFT, false},     // ACT_BLITZ
+    {0.804f, 0.580f, 0.070f, SDLK_SPACE, false},      // ACT_POWERLINE
+    {0.684f, 0.581f, 0.071f, SDLK_RCTRL, false},      // ACT_GRENADE
+    {0.583f, 0.578f, 0.071f, SDLK_RSHIFT, false},     // ACT_SMARTBOMB
+    {0.583f, 0.826f, 0.062f, SDLK_RETURN, false},     // ACT_WEAPON
+    {0.052f, 0.070f, 0.060f, SDLK_ESCAPE, false},     // ACT_ESCAPE
+    {0.969f, 0.070f, 0.060f, 0, true},                // ACT_DEBUG
 };
 
 constexpr int ACTION_COUNT = sizeof(ACTIONS) / sizeof(ACTIONS[0]);
@@ -104,153 +102,139 @@ void DrawStroke(float x1, float y1, float x2, float y2, float width, std::uint32
     g_stroke_vertices.insert(g_stroke_vertices.end(), {quad[0], quad[1], quad[2], quad[2], quad[1], quad[3]});
 }
 
-void DrawGlyph(char glyph, float cx, float cy, float size, float width, std::uint32_t color) {
-    const float half = size * 0.5f;
-    const float left = cx - half;
-    const float right = cx + half;
-    const float top = cy - half;
-    const float bottom = cy + half;
-    const float mid = cy;
-    switch (glyph) {
-        case 'A':
-            DrawStroke(left, bottom, cx, top, width, color);
-            DrawStroke(cx, top, right, bottom, width, color);
-            DrawStroke(cx - size * 0.24f, mid + size * 0.08f, cx + size * 0.24f, mid + size * 0.08f, width, color);
-            break;
-        case 'B':
-            DrawStroke(left, top, left, bottom, width, color);
-            DrawStroke(left, top, right - size * 0.12f, top, width, color);
-            DrawStroke(left, mid, right - size * 0.08f, mid, width, color);
-            DrawStroke(left, bottom, right - size * 0.12f, bottom, width, color);
-            DrawStroke(right - size * 0.12f, top, right, mid, width, color);
-            DrawStroke(right, mid, right - size * 0.12f, bottom, width, color);
-            break;
-        case 'X':
-            DrawStroke(left, top, right, bottom, width, color);
-            DrawStroke(right, top, left, bottom, width, color);
-            break;
-        case 'Y':
-            DrawStroke(left, top, cx, mid, width, color);
-            DrawStroke(right, top, cx, mid, width, color);
-            DrawStroke(cx, mid, cx, bottom, width, color);
-            break;
-        case 'L':
-            DrawStroke(left, top, left, bottom, width, color);
-            DrawStroke(left, bottom, right, bottom, width, color);
-            break;
-        case 'R':
-            DrawStroke(left, top, left, bottom, width, color);
-            DrawStroke(left, top, right - size * 0.10f, top, width, color);
-            DrawStroke(right - size * 0.10f, top, right, mid - size * 0.05f, width, color);
-            DrawStroke(right, mid - size * 0.05f, left, mid, width, color);
-            DrawStroke(cx - size * 0.02f, mid, right, bottom, width, color);
-            break;
-        case 'C':
-            DrawStroke(right, top, left, top, width, color);
-            DrawStroke(left, top, left, bottom, width, color);
-            DrawStroke(left, bottom, right, bottom, width, color);
-            break;
-        case 'D':
-            DrawStroke(left, top, left, bottom, width, color);
-            DrawStroke(left, top, right - size * 0.15f, top, width, color);
-            DrawStroke(right - size * 0.15f, top, right, mid, width, color);
-            DrawStroke(right, mid, right - size * 0.15f, bottom, width, color);
-            DrawStroke(right - size * 0.15f, bottom, left, bottom, width, color);
-            break;
-        case 'E':
-            DrawStroke(left, top, left, bottom, width, color);
-            DrawStroke(left, top, right, top, width, color);
-            DrawStroke(left, mid, right - size * 0.10f, mid, width, color);
-            DrawStroke(left, bottom, right, bottom, width, color);
-            break;
-        case 'F':
-            DrawStroke(left, top, left, bottom, width, color);
-            DrawStroke(left, top, right, top, width, color);
-            DrawStroke(left, mid, right - size * 0.10f, mid, width, color);
-            break;
-        case 'G':
-            DrawStroke(right, top, left, top, width, color);
-            DrawStroke(left, top, left, bottom, width, color);
-            DrawStroke(left, bottom, right, bottom, width, color);
-            DrawStroke(right, bottom, right, mid, width, color);
-            DrawStroke(right, mid, cx, mid, width, color);
-            break;
-        case 'I':
-            DrawStroke(left, top, right, top, width, color);
-            DrawStroke(cx, top, cx, bottom, width, color);
-            DrawStroke(left, bottom, right, bottom, width, color);
-            break;
-        case 'M':
-            DrawStroke(left, bottom, left, top, width, color);
-            DrawStroke(left, top, cx, mid, width, color);
-            DrawStroke(cx, mid, right, top, width, color);
-            DrawStroke(right, top, right, bottom, width, color);
-            break;
-        case 'N':
-            DrawStroke(left, bottom, left, top, width, color);
-            DrawStroke(left, top, right, bottom, width, color);
-            DrawStroke(right, bottom, right, top, width, color);
-            break;
-        case 'O':
-            DrawStroke(left, top, right, top, width, color);
-            DrawStroke(right, top, right, bottom, width, color);
-            DrawStroke(right, bottom, left, bottom, width, color);
-            DrawStroke(left, bottom, left, top, width, color);
-            break;
-        case 'P':
-            DrawStroke(left, bottom, left, top, width, color);
-            DrawStroke(left, top, right, top, width, color);
-            DrawStroke(right, top, right, mid, width, color);
-            DrawStroke(right, mid, left, mid, width, color);
-            break;
-        case 'S':
-            DrawStroke(right, top, left, top, width, color);
-            DrawStroke(left, top, left, mid, width, color);
-            DrawStroke(left, mid, right, mid, width, color);
-            DrawStroke(right, mid, right, bottom, width, color);
-            DrawStroke(right, bottom, left, bottom, width, color);
-            break;
-        case 'T':
-            DrawStroke(left, top, right, top, width, color);
-            DrawStroke(cx, top, cx, bottom, width, color);
-            break;
-        case 'U':
-            DrawStroke(left, top, left, bottom, width, color);
-            DrawStroke(left, bottom, right, bottom, width, color);
-            DrawStroke(right, bottom, right, top, width, color);
-            break;
-        case 'V':
-            DrawStroke(left, top, cx, bottom, width, color);
-            DrawStroke(cx, bottom, right, top, width, color);
-            break;
-        case 'Z':
-            DrawStroke(left, top, right, top, width, color);
-            DrawStroke(right, top, left, bottom, width, color);
-            DrawStroke(left, bottom, right, bottom, width, color);
-            break;
-        case '-':
-            DrawStroke(left, cy, right, cy, width, color);
-            break;
-        case '+':
-            DrawStroke(left, cy, right, cy, width, color);
-            DrawStroke(cx, top, cx, bottom, width, color);
-            break;
+void DrawDpad(TouchControlsClass &controls, float cx, float cy, float radius, const bool pressed[4]) {
+    const float offset = radius * 0.52f;
+    const float button_r = radius * 0.34f;
+    const float stroke = std::max(2.4f, radius * 0.055f);
+    const float dx[] = {-offset, offset, 0.0f, 0.0f};
+    const float dy[] = {0.0f, 0.0f, -offset, offset};
+
+    controls.DrawDisc(cx, cy + radius * 0.05f, radius * 1.04f, radius * 1.04f, 0x48000000);
+    controls.DrawDisc(cx, cy, radius, radius, COLOR_RIM);
+    controls.DrawDisc(cx, cy, radius * 0.94f, radius * 0.94f, COLOR_STICK_BASE);
+
+    for (int i = 0; i < 4; ++i) {
+        const float bx = cx + dx[i];
+        const float by = cy + dy[i];
+        controls.DrawDisc(bx, by, button_r * 1.10f, button_r * 1.10f, 0x50000000);
+        controls.DrawDisc(bx, by, button_r, button_r, COLOR_RIM);
+        controls.DrawDisc(bx, by, button_r * 0.84f, button_r * 0.84f,
+                 pressed[i] ? COLOR_PRESSED : COLOR_BASE);
+
+        const float a = button_r * 0.22f;
+        switch (i) {
+            case 0: // izquierda
+                DrawStroke(bx + a, by - a, bx - a, by, stroke, COLOR_ICON);
+                DrawStroke(bx - a, by, bx + a, by + a, stroke, COLOR_ICON);
+                break;
+            case 1: // derecha
+                DrawStroke(bx - a, by - a, bx + a, by, stroke, COLOR_ICON);
+                DrawStroke(bx + a, by, bx - a, by + a, stroke, COLOR_ICON);
+                break;
+            case 2: // arriba
+                DrawStroke(bx - a, by + a, bx, by - a, stroke, COLOR_ICON);
+                DrawStroke(bx, by - a, bx + a, by + a, stroke, COLOR_ICON);
+                break;
+            case 3: // abajo
+                DrawStroke(bx - a, by - a, bx, by + a, stroke, COLOR_ICON);
+                DrawStroke(bx, by + a, bx + a, by - a, stroke, COLOR_ICON);
+                break;
+        }
     }
+
+    controls.DrawDisc(cx, cy, radius * 0.31f, radius * 0.31f, COLOR_RIM);
+    controls.DrawDisc(cx, cy, radius * 0.24f, radius * 0.24f, COLOR_STICK_KNOB);
 }
 
-void DrawLabel(const char *text, float cx, float cy, float radius, std::uint32_t color) {
-    std::size_t count = 0;
-    while (text[count] != '\0')
-        ++count;
-    if (count == 0)
-        return;
-
-    const float size = std::min(radius * 0.44f, radius * 1.78f / (1.0f + 0.72f * (count - 1)));
-    const float spacing = size * 0.72f;
-    const float start_x = cx - (count - 1) * spacing * 0.5f;
-    const float width = std::max(1.4f, size * 0.10f);
-    for (std::size_t i = 0; i < count; ++i)
-        DrawGlyph(text[i], start_x + static_cast<float>(i) * spacing, cy, size, width, color);
+void DrawActionIcon(TouchControlsClass &controls, int action, float cx, float cy, float radius, std::uint32_t color) {
+    const float w = std::max(2.0f, radius * 0.065f);
+    switch (action) {
+        case 0: { // SALTO: silueta corriendo/saltando
+            controls.DrawDisc(cx + radius * 0.18f, cy - radius * 0.34f, radius * 0.095f, radius * 0.095f, color);
+            DrawStroke(cx + radius * 0.10f, cy - radius * 0.20f, cx - radius * 0.04f, cy + radius * 0.08f, w, color);
+            DrawStroke(cx + radius * 0.03f, cy - radius * 0.12f, cx - radius * 0.30f, cy - radius * 0.26f, w, color);
+            DrawStroke(cx + radius * 0.02f, cy - radius * 0.12f, cx + radius * 0.34f, cy - radius * 0.04f, w, color);
+            DrawStroke(cx - radius * 0.04f, cy + radius * 0.08f, cx - radius * 0.34f, cy + radius * 0.31f, w, color);
+            DrawStroke(cx - radius * 0.04f, cy + radius * 0.08f, cx + radius * 0.27f, cy + radius * 0.31f, w, color);
+            DrawStroke(cx - radius * 0.47f, cy + radius * 0.43f, cx + radius * 0.47f, cy + radius * 0.43f, w, color);
+        } break;
+        case 1: { // FUEGO: llama
+            DrawStroke(cx - radius * 0.02f, cy + radius * 0.43f, cx - radius * 0.34f, cy + radius * 0.08f, w, color);
+            DrawStroke(cx - radius * 0.34f, cy + radius * 0.08f, cx - radius * 0.23f, cy - radius * 0.20f, w, color);
+            DrawStroke(cx - radius * 0.23f, cy - radius * 0.20f, cx - radius * 0.06f, cy - radius * 0.02f, w, color);
+            DrawStroke(cx - radius * 0.06f, cy - radius * 0.02f, cx + radius * 0.06f, cy - radius * 0.45f, w, color);
+            DrawStroke(cx + radius * 0.06f, cy - radius * 0.45f, cx + radius * 0.34f, cy - radius * 0.08f, w, color);
+            DrawStroke(cx + radius * 0.34f, cy - radius * 0.08f, cx + radius * 0.27f, cy + radius * 0.24f, w, color);
+            DrawStroke(cx + radius * 0.27f, cy + radius * 0.24f, cx - radius * 0.02f, cy + radius * 0.43f, w, color);
+            DrawStroke(cx - radius * 0.02f, cy + radius * 0.25f, cx - radius * 0.12f, cy + radius * 0.02f, w * 0.75f, color);
+            DrawStroke(cx - radius * 0.12f, cy + radius * 0.02f, cx + radius * 0.08f, cy - radius * 0.12f, w * 0.75f, color);
+            DrawStroke(cx + radius * 0.08f, cy - radius * 0.12f, cx + radius * 0.15f, cy + radius * 0.18f, w * 0.75f, color);
+            DrawStroke(cx + radius * 0.15f, cy + radius * 0.18f, cx - radius * 0.02f, cy + radius * 0.25f, w * 0.75f, color);
+        } break;
+        case 2: { // BLITZ: flecha veloz
+            DrawStroke(cx - radius * 0.46f, cy - radius * 0.28f, cx + radius * 0.22f, cy - radius * 0.14f, w, color);
+            DrawStroke(cx - radius * 0.36f, cy, cx + radius * 0.44f, cy, w * 1.2f, color);
+            DrawStroke(cx - radius * 0.46f, cy + radius * 0.28f, cx + radius * 0.22f, cy + radius * 0.14f, w, color);
+            DrawStroke(cx + radius * 0.12f, cy - radius * 0.30f, cx + radius * 0.46f, cy, w, color);
+            DrawStroke(cx + radius * 0.46f, cy, cx + radius * 0.12f, cy + radius * 0.30f, w, color);
+        } break;
+        case 3: { // RAYO: descarga eléctrica
+            DrawStroke(cx + radius * 0.12f, cy - radius * 0.45f, cx - radius * 0.20f, cy - radius * 0.02f, w * 1.3f, color);
+            DrawStroke(cx - radius * 0.20f, cy - radius * 0.02f, cx + radius * 0.04f, cy - radius * 0.02f, w * 1.3f, color);
+            DrawStroke(cx + radius * 0.04f, cy - radius * 0.02f, cx - radius * 0.12f, cy + radius * 0.44f, w * 1.3f, color);
+        } break;
+        case 4: { // GRANADA: cuerpo mallado y palanca
+            DrawStroke(cx - radius * 0.15f, cy - radius * 0.27f, cx + radius * 0.15f, cy - radius * 0.27f, w, color);
+            DrawStroke(cx - radius * 0.15f, cy - radius * 0.27f, cx - radius * 0.25f, cy - radius * 0.12f, w, color);
+            DrawStroke(cx + radius * 0.15f, cy - radius * 0.27f, cx + radius * 0.25f, cy - radius * 0.12f, w, color);
+            DrawStroke(cx - radius * 0.25f, cy - radius * 0.12f, cx - radius * 0.25f, cy + radius * 0.27f, w, color);
+            DrawStroke(cx + radius * 0.25f, cy - radius * 0.12f, cx + radius * 0.25f, cy + radius * 0.27f, w, color);
+            DrawStroke(cx - radius * 0.25f, cy + radius * 0.27f, cx + radius * 0.25f, cy + radius * 0.27f, w, color);
+            DrawStroke(cx - radius * 0.19f, cy - radius * 0.03f, cx + radius * 0.19f, cy + radius * 0.18f, w * 0.7f, color);
+            DrawStroke(cx - radius * 0.19f, cy + radius * 0.18f, cx + radius * 0.19f, cy - radius * 0.03f, w * 0.7f, color);
+            DrawStroke(cx - radius * 0.35f, cy - radius * 0.30f, cx - radius * 0.12f, cy - radius * 0.40f, w, color);
+            DrawStroke(cx - radius * 0.12f, cy - radius * 0.40f, cx + radius * 0.10f, cy - radius * 0.34f, w, color);
+        } break;
+        case 5: { // BOMBA: esfera con mecha y chispa
+            for (int i = 0; i < 12; ++i) {
+                const float a1 = static_cast<float>(i) * TWO_PI / 12.0f;
+                const float a2 = static_cast<float>(i + 1) * TWO_PI / 12.0f;
+                DrawStroke(cx + cosf(a1) * radius * 0.27f, cy + sinf(a1) * radius * 0.27f,
+                           cx + cosf(a2) * radius * 0.27f, cy + sinf(a2) * radius * 0.27f, w, color);
+            }
+            DrawStroke(cx + radius * 0.12f, cy - radius * 0.24f, cx + radius * 0.25f, cy - radius * 0.40f, w, color);
+            DrawStroke(cx + radius * 0.25f, cy - radius * 0.40f, cx + radius * 0.39f, cy - radius * 0.35f, w, color);
+            DrawStroke(cx + radius * 0.39f, cy - radius * 0.35f, cx + radius * 0.43f, cy - radius * 0.47f, w, color);
+            DrawStroke(cx + radius * 0.35f, cy - radius * 0.49f, cx + radius * 0.48f, cy - radius * 0.49f, w, color);
+        } break;
+        case 6: { // ARMA: pistola
+            DrawStroke(cx - radius * 0.43f, cy - radius * 0.12f, cx + radius * 0.14f, cy - radius * 0.12f, w * 1.4f, color);
+            DrawStroke(cx + radius * 0.14f, cy - radius * 0.12f, cx + radius * 0.46f, cy - radius * 0.12f, w, color);
+            DrawStroke(cx - radius * 0.34f, cy - radius * 0.12f, cx - radius * 0.34f, cy + radius * 0.18f, w, color);
+            DrawStroke(cx - radius * 0.34f, cy + radius * 0.18f, cx + radius * 0.16f, cy + radius * 0.18f, w, color);
+            DrawStroke(cx + radius * 0.16f, cy + radius * 0.18f, cx + radius * 0.27f, cy + radius * 0.04f, w, color);
+            DrawStroke(cx - radius * 0.06f, cy + radius * 0.18f, cx + radius * 0.02f, cy + radius * 0.42f, w, color);
+            DrawStroke(cx + radius * 0.02f, cy + radius * 0.42f, cx + radius * 0.25f, cy + radius * 0.42f, w, color);
+            DrawStroke(cx + radius * 0.25f, cy + radius * 0.42f, cx + radius * 0.16f, cy + radius * 0.18f, w, color);
+        } break;
+        case 7: // PAUSA
+            DrawStroke(cx - radius * 0.18f, cy - radius * 0.34f, cx - radius * 0.18f, cy + radius * 0.34f, w * 2.3f, color);
+            DrawStroke(cx + radius * 0.18f, cy - radius * 0.34f, cx + radius * 0.18f, cy + radius * 0.34f, w * 2.3f, color);
+            break;
+        case 8: { // DBG / ajustes: engranaje
+            constexpr int teeth = 8;
+            for (int i = 0; i < teeth; ++i) {
+                const float a = static_cast<float>(i) * TWO_PI / teeth;
+                const float x1 = cx + cosf(a) * radius * 0.22f;
+                const float y1 = cy + sinf(a) * radius * 0.22f;
+                const float x2 = cx + cosf(a) * radius * 0.43f;
+                const float y2 = cy + sinf(a) * radius * 0.43f;
+                DrawStroke(x1, y1, x2, y2, w, color);
+            }
+            controls.DrawDisc(cx, cy, radius * 0.20f, radius * 0.20f, color);
+            controls.DrawDisc(cx, cy, radius * 0.10f, radius * 0.10f, COLOR_DEBUGBTN);
+        } break;
+    }
 }
 
 }  // namespace
@@ -265,7 +249,6 @@ void TouchControlsClass::Init() {
         actions[i].y = ACTIONS[i].y;
         actions[i].r = ACTIONS[i].r;
         actions[i].scancode = ACTIONS[i].toggle ? 0 : static_cast<int>(SDL_GetScancodeFromKey(ACTIONS[i].key));
-        actions[i].label = ACTIONS[i].label;
         actions[i].is_toggle = ACTIONS[i].toggle;
         actions[i].pressed = false;
         actions[i].finger = -1;
@@ -277,6 +260,7 @@ void TouchControlsClass::Init() {
     fingers.clear();
     stick_active = false;
     stick_finger = -1;
+    std::fill(std::begin(dpad_pressed), std::end(dpad_pressed), false);
     debug_requested = false;
 
     Protokoll << "Mando virtual: " << (available ? "pantalla tactil detectada" : "sin pantalla tactil")
@@ -343,11 +327,11 @@ bool TouchControlsClass::IsActionPressed(VirtualAction action) const {
     const bool stick_down = stick_active && stick_y > deadzone;
 
     switch (action) {
-        case VirtualAction::MOVE_LEFT: return stick_left;
-        case VirtualAction::MOVE_RIGHT: return stick_right;
-        case VirtualAction::DUCK: return stick_down;
-        case VirtualAction::LOOK_UP: return stick_up;
-        case VirtualAction::LOOK_DOWN: return stick_down;
+        case VirtualAction::MOVE_LEFT: return dpad_pressed[0] || stick_left;
+        case VirtualAction::MOVE_RIGHT: return dpad_pressed[1] || stick_right;
+        case VirtualAction::DUCK: return dpad_pressed[3] || stick_down;
+        case VirtualAction::LOOK_UP: return dpad_pressed[2] || stick_up;
+        case VirtualAction::LOOK_DOWN: return dpad_pressed[3] || stick_down;
         case VirtualAction::JUMP: return actions[ACT_JUMP].pressed;
         case VirtualAction::FIRE: return actions[ACT_FIRE].pressed;
         case VirtualAction::BLITZ: return actions[ACT_BLITZ].pressed;
@@ -400,6 +384,7 @@ void TouchControlsClass::ClearKeys() {
     stick_active = false;
     stick_finger = -1;
     stick_x = stick_y = 0.0f;
+    std::fill(std::begin(dpad_pressed), std::end(dpad_pressed), false);
 }
 
 void TouchControlsClass::ComputePixels(const SDL_Rect &screen_rect, float &scale) {
@@ -513,6 +498,7 @@ void TouchControlsClass::Update(const SDL_Rect &screen_rect, int win_w, int win_
 
     stick_radius = STICK_RADIUS_FRAC * static_cast<float>(win_h);
     stick_x = stick_y = 0.0f;
+    std::fill(std::begin(dpad_pressed), std::end(dpad_pressed), false);
     bool stick_finger_seen = false;
 
     auto press_scancode = [this](SDL_Scancode scancode) {
@@ -555,6 +541,27 @@ void TouchControlsClass::Update(const SDL_Rect &screen_rect, int win_w, int win_
         }
 
         bool used = false;
+        const float dpad_cx = screen_rect.x + stick_default_x * screen_rect.w;
+        const float dpad_cy = screen_rect.y + stick_default_y * screen_rect.h;
+        const float dpad_r = 0.185f * h;
+        const float dpad_offset = dpad_r * 0.52f;
+        const float dpad_button_r = dpad_r * 0.34f;
+        const struct DpadDirection { float x, y; SDL_Scancode key; } directions[] = {
+            {-dpad_offset, 0.0f, SDL_SCANCODE_LEFT}, {dpad_offset, 0.0f, SDL_SCANCODE_RIGHT},
+            {0.0f, -dpad_offset, SDL_SCANCODE_UP}, {0.0f, dpad_offset, SDL_SCANCODE_DOWN},
+        };
+        for (int direction = 0; direction < 4; ++direction) {
+            if (std::hypot(px - dpad_cx - directions[direction].x,
+                           py - dpad_cy - directions[direction].y) <= dpad_button_r) {
+                dpad_pressed[direction] = true;
+                press_scancode(directions[direction].key);
+                used = true;
+                break;
+            }
+        }
+        if (used)
+            continue;
+
         for (int b = 0; b < ACTION_COUNT; ++b) {
             const float rx = actions[b].r * h / static_cast<float>(screen_rect.w);
             const float ry = actions[b].r;
@@ -662,21 +669,14 @@ void TouchControlsClass::DrawGeometry(const SDL_Rect &screen_rect) {
         return;
 
     const float h = static_cast<float>(screen_rect.h);
-    const float stick_cx = screen_rect.x + stick_default_x * screen_rect.w;
-    const float stick_cy = screen_rect.y + stick_default_y * screen_rect.h;
-    const float stick_r = STICK_RADIUS_FRAC * h;
-    const float knob_x = stick_cx + (stick_active ? stick_x : 0.0f);
-    const float knob_y = stick_cy + (stick_active ? stick_y : 0.0f);
+    const float dpad_cx = screen_rect.x + stick_default_x * screen_rect.w;
+    const float dpad_cy = screen_rect.y + stick_default_y * screen_rect.h;
+    const float dpad_r = 0.185f * h;
 
     g_stroke_vertices.clear();
     g_stroke_vertices.reserve(1024);
 
-    // Stick izquierdo grande y flotante, como en la versión de la captura.
-    DrawDisc(stick_cx, stick_cy + stick_r * 0.08f, stick_r * 1.08f, stick_r * 1.08f, 0x48000000);
-    DrawDisc(stick_cx, stick_cy, stick_r, stick_r, COLOR_RIM);
-    DrawDisc(stick_cx, stick_cy, stick_r * 0.91f, stick_r * 0.91f, COLOR_STICK_BASE);
-    DrawDisc(knob_x, knob_y, stick_r * 0.43f, stick_r * 0.43f,
-             stick_active ? COLOR_PRESSED : COLOR_STICK_KNOB);
+    DrawDpad(*this, dpad_cx, dpad_cy, dpad_r, dpad_pressed);
 
     for (int i = 0; i < ACTION_COUNT; ++i) {
         const float cx = screen_rect.x + actions[i].x * screen_rect.w;
@@ -690,13 +690,13 @@ void TouchControlsClass::DrawGeometry(const SDL_Rect &screen_rect) {
         DrawDisc(cx, cy, r * 1.04f, r * 1.04f,
                  actions[i].is_toggle ? COLOR_DEBUG_RIM : COLOR_RIM);
         DrawDisc(cx, cy, r * 0.92f, r * 0.92f, fill);
-        DrawLabel(actions[i].label, cx, cy, r * 0.78f, COLOR_ICON);
+        DrawActionIcon(*this, i, cx, cy, r * 0.74f, COLOR_ICON);
 
         if (editing)
             DrawDisc(cx, cy, r * 0.10f, r * 0.10f, COLOR_EDIT);
     }
 
-    // Dibuja el texto en un lote para mantener ligero el overlay en Android.
+    // Dibuja los pictogramas en un lote para mantener ligero el overlay en Android.
     if (!g_stroke_vertices.empty()) {
         DirectGraphics.DrawColorVertices(GL_TRIANGLES,
                                          static_cast<std::uint32_t>(g_stroke_vertices.size()),
