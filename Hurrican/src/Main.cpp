@@ -107,6 +107,67 @@ std::string g_save_ext;         // Where high scores and save games
 
 sCommandLineParams CommandLineParams;
 
+#if defined(ANDROID)
+namespace {
+// Der Finger, der das Panel geöffnet hat, wird bis zum Loslassen vom Spielermando abgeschirmt.
+bool DebugPanelOpenBlock = false;
+}
+
+void Android_HandleTouchEvent(const SDL_TouchFingerEvent &event) {
+    switch (event.type) {
+        case SDL_FINGERDOWN: {
+            if (DebugPanel.IsOpen()) {
+                DebugPanel.HandleTouch(event.x, event.y, true, DirectGraphics.GetRenderRect());
+                DebugPanelOpenBlock = true;
+                TouchControls.CancelTouches();
+            } else {
+                const float px = event.x * static_cast<float>(DirectGraphics.GetWindowWidth());
+                const float py = event.y * static_cast<float>(DirectGraphics.GetWindowHeight());
+                const SDL_Rect touch_area{0, 0, DirectGraphics.GetWindowWidth(),
+                                          DirectGraphics.GetWindowHeight()};
+                if (TouchControls.HitDebugButton(px, py, touch_area)) {
+                    DebugPanel.SetOpen(true);
+                    DebugPanelOpenBlock = true;
+                    TouchControls.CancelTouches();
+                } else {
+                    TouchControls.HandleTouchEvent(event);
+                }
+            }
+            break;
+        }
+        case SDL_FINGERMOTION:
+            if (!DebugPanelOpenBlock && !DebugPanel.IsOpen())
+                TouchControls.HandleTouchEvent(event);
+            break;
+        case SDL_FINGERUP:
+            if (DebugPanelOpenBlock) {
+                if (DebugPanel.IsOpen())
+                    DebugPanel.HandleTouch(event.x, event.y, false, DirectGraphics.GetRenderRect());
+                DebugPanelOpenBlock = false;
+                TouchControls.CancelTouches();
+            } else {
+                TouchControls.HandleTouchEvent(event);
+            }
+            break;
+        default:
+            break;
+    }
+}
+
+void Android_PumpTouchEvents() {
+    constexpr int EVENT_BATCH_SIZE = 16;
+    SDL_Event events[EVENT_BATCH_SIZE];
+    int count = 0;
+    do {
+        // Solo retiramos los eventos finger para no robar a Main los eventos de lifecycle,
+        // ventana, joystick o salida cuando estamos dentro de un bucle modal.
+        count = SDL_PeepEvents(events, EVENT_BATCH_SIZE, SDL_GETEVENT, SDL_FINGERDOWN, SDL_FINGERMOTION);
+        for (int i = 0; i < count; ++i)
+            Android_HandleTouchEvent(events[i].tfinger);
+    } while (count == EVENT_BATCH_SIZE);
+}
+#endif
+
 // --------------------------------------------------------------------------------------
 // Variablen für den Spielablauf
 // --------------------------------------------------------------------------------------
@@ -474,9 +535,6 @@ int main(int argc, char *argv[]) {
     // Marcada cuando Android destruye el contexto OpenGL; se repara fuera del bucle de
     // eventos para no recompilar shaders en mitad del procesado.
     bool context_lost = false;
-    // true mientras el dedo que abrio/interactuo con el panel sigue en la pantalla, para que
-    // ese mismo toque no llegue al mando virtual.
-    bool DebugPanelOpenBlock = false;
 #endif
 
     while (GameRunning) {
@@ -531,41 +589,10 @@ int main(int argc, char *argv[]) {
                  * El panel de depuracion tiene prioridad y consume los toques mientras esta
                  * abierto; los demas se entregan al mando multitactil.
                  */
-                case SDL_FINGERDOWN: {
-                    if (DebugPanel.IsOpen()) {
-                        DebugPanel.HandleTouch(event.tfinger.x, event.tfinger.y, true,
-                                               DirectGraphics.GetRenderRect());
-                        DebugPanelOpenBlock = true;
-                        TouchControls.CancelTouches();
-                    } else {
-                        const float px = event.tfinger.x * static_cast<float>(DirectGraphics.GetWindowWidth());
-                        const float py = event.tfinger.y * static_cast<float>(DirectGraphics.GetWindowHeight());
-                        const SDL_Rect touch_area{0, 0, DirectGraphics.GetWindowWidth(),
-                                                  DirectGraphics.GetWindowHeight()};
-                        if (TouchControls.HitDebugButton(px, py, touch_area)) {
-                            DebugPanel.SetOpen(true);
-                            DebugPanelOpenBlock = true;
-                            TouchControls.CancelTouches();
-                        } else {
-                            TouchControls.HandleTouchEvent(event.tfinger);
-                        }
-                    }
-                    break;
-                }
+                case SDL_FINGERDOWN:
                 case SDL_FINGERMOTION:
-                    if (!DebugPanelOpenBlock && !DebugPanel.IsOpen())
-                        TouchControls.HandleTouchEvent(event.tfinger);
-                    break;
                 case SDL_FINGERUP:
-                    if (DebugPanelOpenBlock) {
-                        if (DebugPanel.IsOpen())
-                            DebugPanel.HandleTouch(event.tfinger.x, event.tfinger.y, false,
-                                                   DirectGraphics.GetRenderRect());
-                        DebugPanelOpenBlock = false;
-                        TouchControls.CancelTouches();
-                    } else {
-                        TouchControls.HandleTouchEvent(event.tfinger);
-                    }
+                    Android_HandleTouchEvent(event.tfinger);
                     break;
                 case SDL_WINDOWEVENT:
                     if (event.window.event == SDL_WINDOWEVENT_RESIZED ||

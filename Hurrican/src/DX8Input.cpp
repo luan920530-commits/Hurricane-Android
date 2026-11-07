@@ -21,6 +21,7 @@
 #include "Main.hpp"
 #if defined(ANDROID)
 #  include "DX8Graphics.hpp"
+#  include "SDLPort/AndroidPort.hpp"
 #  include "TouchControls.hpp"
 #endif
 
@@ -187,6 +188,10 @@ void DirectInputClass::Exit() {
 bool DirectInputClass::UpdateTastatur() {
     SDL_PumpEvents();
 #if defined(ANDROID)
+    // Hay pantallas modales (fin de nivel, intro, etc.) con su propio bucle y sin el
+    // SDL_PollEvent de Main. Sin vaciar aqui los eventos finger, el toque nunca llegaba al
+    // mando y la pantalla parecia congelada.
+    Android_PumpTouchEvents();
     /*
      * Se refresca el buffer propio con el estado real del teclado (teclados USB, gamepads o
      * pulsaciones de teclas que Android entrega como eventos de teclado) y despues el mando

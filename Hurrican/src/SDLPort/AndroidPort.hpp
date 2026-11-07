@@ -19,6 +19,7 @@
 
 #if defined(ANDROID)
 
+#  include <SDL.h>
 #  include <string>
 
 /**
@@ -50,6 +51,15 @@ const std::string &Android_GetSavePath();
  * @return ruta absoluta del directorio de datos (el mismo que Android_InitStorage()).
  */
 std::string Android_BootstrapStorage();
+
+/** Procesa un evento táctil usando la misma ruta que el bucle principal. */
+void Android_HandleTouchEvent(const SDL_TouchFingerEvent &event);
+
+/**
+ * Extrae y procesa solo eventos táctiles pendientes. Se usa en bucles internos del juego
+ * (por ejemplo, el resumen de nivel) que no pasan por el SDL_PollEvent del bucle principal.
+ */
+void Android_PumpTouchEvents();
 
 /**
  * Devuelve la version de los datos instalados, leyendo un fichero marcador. Vacio si no

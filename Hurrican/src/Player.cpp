@@ -1248,7 +1248,12 @@ void PlayerClass::AnimatePlayer() {
             AnimPhase = 2;  // das springen starten
             Handlung = PlayerActionEnum::SPRINGEN;
             JumpStart = ypos;
-            yspeed = -PLAYER_MAXJUMPSPEED;
+            float jump_speed = PLAYER_MAXJUMPSPEED;
+#if defined(ANDROID)
+            if (PlayerNumber == 0 && DebugPanelClass::SuperJump())
+                jump_speed *= 1.75f;
+#endif
+            yspeed = -jump_speed;
 
             JumpAdd = 0.0f;
 
@@ -2251,9 +2256,14 @@ void PlayerClass::AnimatePlayer() {
         if (yspeed > PLAYER_MAXJUMPSPEED)  // Schnellste "Fall-Geschwindigkeit" erreicht ?
             yspeed = PLAYER_MAXJUMPSPEED;
 
+        float max_jump_height = PLAYER_MAXJUMP;
+#if defined(ANDROID)
+        if (PlayerNumber == 0 && DebugPanelClass::SuperJump())
+            max_jump_height *= 2.0f;
+#endif
         if (InLiquid == false) {
-            if (ypos < JumpStart - PLAYER_MAXJUMP ||  // Höchster Punkt erreicht ? Dann den Fall
-                Aktion[AKTION_JUMP] == false)         // dazu addieren
+            if (ypos < JumpStart - max_jump_height ||  // Hoehe erreicht? Dann den Fall
+                Aktion[AKTION_JUMP] == false)          // dazu addieren
             {
                 // Der Wert, wie schnell man wieder runterkommt, wird jetzt aus der Sprunghöhe errechnet, sodass
                 // man bei einem kleinen Sprung viel schneller wieder runterkommt
@@ -2264,8 +2274,8 @@ void PlayerClass::AnimatePlayer() {
                     JumpAdd = 18.0f;
             }
         } else {
-            if (ypos < JumpStart - (PLAYER_MAXJUMP + 50) ||  // Höchster Punkt im Wasser liegt anders
-                Aktion[AKTION_JUMP] == false)                // dazu addieren
+            if (ypos < JumpStart - (max_jump_height + 50.0f) ||  // Hoechster Punkt im Wasser
+                Aktion[AKTION_JUMP] == false)                    // dazu addieren
                 JumpAdd = PLAYER_JUMPADDSPEED;
         }
     }

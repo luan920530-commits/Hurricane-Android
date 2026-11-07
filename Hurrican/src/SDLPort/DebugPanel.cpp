@@ -6,6 +6,8 @@
  *
  *   - Vidas infinitas      (no se descuenta ninguna vida)
  *   - Municion infinita    (granadas, powerlines y smart bombs siempre llenas)
+ *   - Mana infinito        (recarga constante del recurso Armour)
+ *   - Super salto          (mas impulso y altura al saltar)
  *   - Armas al maximo      (las cuatro armas al nivel maximo)
  *   - Modo invulnerable    (GodMode del motor: no recibe dano)
  *   - Mostrar FPS          (contador de fotogramas del motor)
@@ -32,6 +34,7 @@
 #  include "DX8Font.hpp"
 #  include "DX8Graphics.hpp"
 #  include "DX8Input.hpp"
+#  include "Globals.hpp"
 #  include "Logdatei.hpp"
 #  include "Main.hpp"
 #  include "Player.hpp"
@@ -41,11 +44,13 @@ DebugPanelClass DebugPanel;
 
 namespace {
 
-constexpr int OPT_COUNT = 6;
+constexpr int OPT_COUNT = 8;
 
 enum OptionId {
     OPT_LIVES = 0,
     OPT_AMMO,
+    OPT_MANA,
+    OPT_SUPER_JUMP,
     OPT_WEAPONS,
     OPT_GODMODE,
     OPT_FPS,
@@ -73,6 +78,14 @@ bool DebugPanelClass::InfiniteLives() {
 
 bool DebugPanelClass::InfiniteAmmo() {
     return InfiniteAmmo_;
+}
+
+bool DebugPanelClass::InfiniteMana() {
+    return InfiniteMana_;
+}
+
+bool DebugPanelClass::SuperJump() {
+    return SuperJump_;
 }
 
 bool DebugPanelClass::MaxWeapons() {
@@ -116,7 +129,7 @@ void DebugPanelClass::SetGodMode(bool enabled) {
 }
 
 bool DebugPanelClass::AnyActive() {
-    return InfiniteLives_ || InfiniteAmmo_ || MaxWeapons_ || GodMode_;
+    return InfiniteLives_ || InfiniteAmmo_ || InfiniteMana_ || MaxWeapons_ || GodMode_;
 }
 
 void DebugPanelClass::ApplyGodMode() {
@@ -154,6 +167,9 @@ void DebugPanelClass::ApplyFrameCheats() {
             if (pl.SmartBombs < 9)
                 pl.SmartBombs = 9;
         }
+
+        if (InfiniteMana_)
+            pl.Armour = MAX_ARMOUR;
 
         if (MaxWeapons_) {
             for (int w = 0; w < 4; w++) {
@@ -222,6 +238,12 @@ bool DebugPanelClass::HandleTouch(float nx, float ny, bool down, const SDL_Rect 
             case OPT_AMMO:
                 InfiniteAmmo_ = !InfiniteAmmo_;
                 break;
+            case OPT_MANA:
+                InfiniteMana_ = !InfiniteMana_;
+                break;
+            case OPT_SUPER_JUMP:
+                SuperJump_ = !SuperJump_;
+                break;
             case OPT_WEAPONS:
                 MaxWeapons_ = !MaxWeapons_;
                 break;
@@ -272,6 +294,8 @@ void DebugPanelClass::Draw(const SDL_Rect &screen_rect) {
     const Option options[OPT_COUNT] = {
         {"Vidas infinitas", &InfiniteLives_},
         {"Municion infinita", &InfiniteAmmo_},
+        {"Mana infinita", &InfiniteMana_},
+        {"Super salto", &SuperJump_},
         {"Armas al maximo", &MaxWeapons_},
         {"Invulnerable", &GodMode_},
         {"Mostrar FPS", &CommandLineParams.ShowFPS},
