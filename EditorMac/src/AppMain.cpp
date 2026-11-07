@@ -2,6 +2,7 @@
 #include "FileDialogs.hpp"
 
 #include <SDL.h>
+#include <SDL_image.h>
 #include <SDL_opengl.h>
 #include "imgui.h"
 #include "imgui_impl_opengl3.h"
@@ -11,8 +12,10 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <string>
 #include <utility>
+#include <vector>
 
 using hurrican::editor::MapDocument;
 using hurrican::editor::MapObject;
@@ -20,8 +23,15 @@ using hurrican::editor::MapTile;
 
 namespace {
 
+struct AtlasTexture {
+    GLuint texture = 0;
+    int width = 0;
+    int height = 0;
+};
+
 struct EditorState {
     MapDocument map;
+    std::vector<AtlasTexture> atlases;
     bool loaded = false;
     bool dirty = false;
     bool paint_mode = false;
@@ -50,6 +60,66 @@ void CopyFromField(char* destination, std::size_t capacity, const char* source) 
     std::strncpy(destination, source, capacity - 1);
 }
 
+void ReleaseAtlases(EditorState& state) {
+    for (const AtlasTexture& atlas : state.atlases) {
+        if (atlas.texture != 0)
+            glDeleteTextures(1, &atlas.texture);
+    }
+    state.atlases.clear();
+}
+
+std::filesystem::path FindTextureDirectory(const std::filesystem::path& map_path) {
+    std::filesystem::path directory = map_path.parent_path();
+    for (int depth = 0; depth < 5 && !directory.empty(); ++depth) {
+        const std::filesystem::path candidate = directory / "textures";
+        if (std::filesystem::is_directory(candidate))
+            return candidate;
+        directory = directory.parent_path();
+    }
+    return {};
+}
+
+void LoadAtlases(EditorState& state) {
+    ReleaseAtlases(state);
+    const std::filesystem::path texture_directory = FindTextureDirectory(state.map_path);
+    const std::filesystem::path map_directory = std::filesystem::path(state.map_path).parent_path();
+    state.atlases.resize(state.map.header.tileset_count);
+
+    for (std::size_t i = 0; i < state.atlases.size(); ++i) {
+        const char* name = state.map.header.tileset_names[i];
+        std::size_t name_length = 0;
+        while (name_length < sizeof(state.map.header.tileset_names[i]) && name[name_length] != '\0')
+            ++name_length;
+        if (name_length == 0)
+            continue;
+
+        const std::filesystem::path filename(std::string(name, name_length));
+        std::filesystem::path image_path = map_directory / filename;
+        if (!std::filesystem::is_regular_file(image_path) && !texture_directory.empty())
+            image_path = texture_directory / filename;
+        SDL_Surface* source = IMG_Load(image_path.string().c_str());
+        if (source == nullptr)
+            continue;
+        SDL_Surface* rgba = SDL_ConvertSurfaceFormat(source, SDL_PIXELFORMAT_RGBA32, 0);
+        SDL_FreeSurface(source);
+        if (rgba == nullptr)
+            continue;
+
+        AtlasTexture& atlas = state.atlases[i];
+        atlas.width = rgba->w;
+        atlas.height = rgba->h;
+        glGenTextures(1, &atlas.texture);
+        glBindTexture(GL_TEXTURE_2D, atlas.texture);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, rgba->w, rgba->h, 0,
+                     GL_RGBA, GL_UNSIGNED_BYTE, rgba->pixels);
+        SDL_FreeSurface(rgba);
+    }
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
 bool LoadMap(EditorState& state) {
     std::string error;
     MapDocument loaded;
@@ -59,6 +129,7 @@ bool LoadMap(EditorState& state) {
     }
     state.map = std::move(loaded);
     state.loaded = true;
+    LoadAtlases(state);
     state.dirty = false;
     state.selected_x = 0;
     state.selected_y = 0;
@@ -99,7 +170,7 @@ ImU32 TileColor(const MapTile& tile) {
 
 void DrawMapCanvas(EditorState& state) {
     ImGui::Begin("Level map");
-    ImGui::TextDisabled("Schematic tile preview; texture-atlas rendering is the next editor milestone.");
+    ImGui::TextDisabled("Uses game texture atlases when available; missing assets are shown schematically.");
     ImGui::Checkbox("Paint brush", &state.paint_mode);
     ImGui::SameLine();
     ImGui::SliderFloat("Zoom", &state.zoom, 0.20f, 2.0f, "%.2fx");
@@ -135,6 +206,22 @@ void DrawMapCanvas(EditorState& state) {
             const ImVec2 p0(origin.x + x * cell, origin.y + y * cell);
             const ImVec2 p1(p0.x + cell, p0.y + cell);
             draw->AddRectFilled(p0, p1, TileColor(tile));
+            const auto draw_layer = [&](std::uint8_t tileset, std::uint8_t art) {
+                if (tileset == 0 || tileset > state.atlases.size() || art >= 144)
+                    return;
+                const AtlasTexture& atlas = state.atlases[tileset - 1];
+                if (atlas.texture == 0 || atlas.width < 240 || atlas.height < 240)
+                    return;
+                constexpr float tile_size = 20.0f;
+                const float u0 = (art % 12) * tile_size / atlas.width;
+                const float v0 = (art / 12) * tile_size / atlas.height;
+                const float u1 = u0 + tile_size / atlas.width;
+                const float v1 = v0 + tile_size / atlas.height;
+                draw->AddImage(static_cast<ImTextureID>(atlas.texture), p0, p1,
+                               ImVec2(u0, v0), ImVec2(u1, v1));
+            };
+            draw_layer(tile.tileset_back, tile.art_back);
+            draw_layer(tile.tileset_front, tile.art_front);
             if (cell >= 18.0f)
                 draw->AddRect(p0, p1, IM_COL32(12, 15, 20, 90));
             if (x == state.selected_x && y == state.selected_y)
@@ -211,8 +298,43 @@ void DrawInspector(EditorState& state) {
 
     ImGui::SeparatorText("Tile brush / selected tile");
     ImGui::Combo("Layer", &state.brush_layer, "Background\0Foreground\0");
-    ImGui::InputInt("Tileset index", &state.brush_tileset);
+    state.brush_tileset = std::clamp(state.brush_tileset, 1,
+                                     std::max(1, static_cast<int>(state.map.header.tileset_count)));
+    char selected_tileset[17];
+    CopyToField(selected_tileset, sizeof(selected_tileset),
+                state.map.header.tileset_names[state.brush_tileset - 1], 16);
+    if (ImGui::BeginCombo("Tileset", selected_tileset)) {
+        for (int i = 0; i < state.map.header.tileset_count; ++i) {
+            char name[17];
+            CopyToField(name, sizeof(name), state.map.header.tileset_names[i], 16);
+            const bool selected = state.brush_tileset == i + 1;
+            if (ImGui::Selectable(name, selected))
+                state.brush_tileset = i + 1;
+            if (selected)
+                ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+    state.brush_art = std::clamp(state.brush_art, 0, 143);
     ImGui::InputInt("Tile art index", &state.brush_art);
+    state.brush_art = std::clamp(state.brush_art, 0, 143);
+    if (state.brush_tileset > 0 && state.brush_tileset <= static_cast<int>(state.atlases.size())) {
+        const AtlasTexture& palette = state.atlases[state.brush_tileset - 1];
+        if (palette.texture != 0) {
+            ImGui::TextDisabled("Click a cell in the tileset to choose the brush tile.");
+            ImGui::Image(static_cast<ImTextureID>(palette.texture), ImVec2(256.0f, 256.0f));
+            if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                const ImVec2 top_left = ImGui::GetItemRectMin();
+                const ImVec2 mouse = ImGui::GetIO().MousePos;
+                const int atlas_x = static_cast<int>((mouse.x - top_left.x) * palette.width / 256.0f);
+                const int atlas_y = static_cast<int>((mouse.y - top_left.y) * palette.height / 256.0f);
+                const int col = atlas_x / 20;
+                const int row = atlas_y / 20;
+                if (col >= 0 && col < 12 && row >= 0 && row < 12)
+                    state.brush_art = row * 12 + col;
+            }
+        }
+    }
     if (state.selected_x >= 0 && state.selected_y >= 0) {
         MapTile& tile = state.map.tile(static_cast<std::uint32_t>(state.selected_x),
                                        static_cast<std::uint32_t>(state.selected_y));
@@ -297,6 +419,8 @@ int main(int, char**) {
         std::fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return 1;
     }
+    if ((IMG_Init(IMG_INIT_PNG | IMG_INIT_JPG) & IMG_INIT_PNG) == 0)
+        std::fprintf(stderr, "SDL_image could not initialize PNG support: %s\n", IMG_GetError());
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
@@ -373,11 +497,13 @@ int main(int, char**) {
         SDL_GL_SwapWindow(window);
     }
 
+    ReleaseAtlases(state);
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplSDL2_Shutdown();
     ImGui::DestroyContext();
     SDL_GL_DeleteContext(gl_context);
     SDL_DestroyWindow(window);
+    IMG_Quit();
     SDL_Quit();
     return 0;
 }

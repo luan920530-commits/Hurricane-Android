@@ -8,17 +8,17 @@ The new target uses SDL2, OpenGL, and Dear ImGui. It targets Intel Macs running 
 
 - Portable reader/writer for the original `.map` header, tiles, objects, and appendix.
 - Byte-for-byte round-trip test for all maps currently bundled under `Hurrican/data/levels`.
-- SDL2/ImGui application shell with native macOS Open/Save panels, a schematic tile-map canvas, tile-layer/art/block-flag editing, basic level metadata, and numeric object editing.
+- SDL2/ImGui application shell with native macOS Open/Save panels, atlas-textured tile preview when the matching game data folder is present, tile-layer/art/block-flag editing, basic level metadata, and numeric object editing.
 - The map format is kept compatible; the application does not rewrite source maps unless the user explicitly saves.
 
-The editor is **not yet at full feature parity** with the Windows tool. The canvas currently uses schematic tile colors; it does not yet render the actual atlas graphics. Texture/object palettes, lighting and shadows, triggers, background/parallax and music selectors, undo/clipboard/minimap, and in-editor game testing remain to be ported.
+The editor is **not yet at full feature parity** with the Windows tool. It renders the map's tile atlases when it finds the matching game `data/textures` folder, and falls back to schematic colors if those images are unavailable. Object catalog/sprites, lighting and shadows, triggers, background/parallax and music selectors, undo/clipboard/minimap, and in-editor game testing remain to be ported.
 
 ## Build on an Intel Mac
 
 Install CMake and SDL2. Dear ImGui 1.91.9 is vendored with its upstream license in `third_party/imgui`:
 
 ```sh
-brew install cmake sdl2
+brew install cmake sdl2 sdl2_image
 cmake -S EditorMac -B build/EditorMac -DCMAKE_OSX_ARCHITECTURES=x86_64
 cmake --build build/EditorMac --config Release
 ctest --test-dir build/EditorMac --output-on-failure

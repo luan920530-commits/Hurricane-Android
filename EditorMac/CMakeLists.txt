@@ -9,6 +9,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(SDL2 CONFIG REQUIRED)
+find_package(SDL2_image CONFIG REQUIRED)
 find_package(OpenGL REQUIRED)
 
 # Dear ImGui core and the SDL2/OpenGL backends are vendored at a fixed upstream version.
@@ -32,7 +33,7 @@ add_executable(HurricanMapEditor MACOSX_BUNDLE
 target_include_directories(HurricanMapEditor PRIVATE src)
 target_compile_definitions(HurricanMapEditor PRIVATE SDL_MAIN_HANDLED)
 find_library(APPKIT_FRAMEWORK AppKit REQUIRED)
-target_link_libraries(HurricanMapEditor PRIVATE imgui SDL2::SDL2 OpenGL::GL ${APPKIT_FRAMEWORK})
+target_link_libraries(HurricanMapEditor PRIVATE imgui SDL2::SDL2 SDL2_image::SDL2_image OpenGL::GL ${APPKIT_FRAMEWORK})
 set_target_properties(HurricanMapEditor PROPERTIES
     MACOSX_BUNDLE_BUNDLE_NAME "Hurrican Map Editor"
     MACOSX_BUNDLE_GUI_IDENTIFIER "org.hurrican.mapeditor"
