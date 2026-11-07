@@ -120,13 +120,9 @@ GameStateEnum SpielZustand = GameStateEnum::CRACKTRO;  // Aktueller Zustand des 
 
 void FillCommandLineParams(int argc, char *args[]) {
 
-    // Set some sensible defaults. En Android llena todo el panel: la salida del FBO se
-    // adapta al ancho y alto reales de la ventana cada vez que cambia la pantalla.
-#if defined(ANDROID)
-    CommandLineParams.RunWindowMode = ScreenMode::FULLSCREEN_STRETCHED;
-#else
+    // Fullscreen en Android pero conservando la proporción original 4:3 del juego.
+    // El overlay táctil sí ocupa toda la ventana y queda disponible en los laterales.
     CommandLineParams.RunWindowMode = ScreenMode::FULLSCREEN;
-#endif
     CommandLineParams.Scanlines = false;
     CommandLineParams.ColorBleed = false;
     CommandLineParams.ScreenCurvature = false;

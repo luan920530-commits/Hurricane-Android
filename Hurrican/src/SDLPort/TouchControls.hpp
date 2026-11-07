@@ -5,13 +5,13 @@
  * sin depender de que el perfil activo sea teclado o joystick. Tambien escribe las teclas
  * virtuales en TouchKeyboard para conservar su compatibilidad con menus y pantallas.
  *
- * DISPOSICION inspirada en un mando clasico de pantalla: d-pad y stick L a la izquierda,
- * cuatro botones A/B/X/Y y stick R a la derecha, hombros ZL/L/ZR/R, pausa y +/-.
- * Las posiciones se anclan a la ventana completa y escalan con su altura.
+ * DISPOSICION restaurada: stick grande a la izquierda; botones con texto PAUSA, DBG,
+ * BOMBA, GRANADA, RAYO, BLITZ, ARMA, FUEGO y SALTO, como en la captura del usuario.
+ * Las posiciones se anclan a la ventana completa; el juego conserva su area 4:3 centrada.
  *
- *  - D-pad y sticks admiten multitouch; el stick derecho dispara y permite apuntar arriba/abajo.
- *  - Los botones mapean las mismas teclas que el teclado original, sin cambiar la logica del juego.
- *  - El boton del ojo abre el panel de depuracion; la configuracion puede ocultar el overlay.
+ *  - Stick y botones admiten multitouch para moverse y ejecutar habilidades a la vez.
+ *  - Las acciones mantienen sus teclas de juego y tambien se aplican directamente al jugador.
+ *  - DBG abre el panel de depuracion; el overlay puede ocultarse desde las opciones.
  *  - Modo edicion y restauracion de la disposicion permanecen disponibles.
  *
  * (c) 2026 - Port de Android, misma licencia que el resto del codigo (MIT).
@@ -96,9 +96,6 @@ class TouchControlsClass {
         ACT_WEAPON,
         ACT_ESCAPE,
         ACT_DEBUG,
-        ACT_ZR,
-        ACT_MINUS,
-        ACT_PLUS,
         ACT_COUNT
     };
 
@@ -106,6 +103,7 @@ class TouchControlsClass {
         float x, y;          ///< centro, normalizado (0..1) respecto a la ventana completa
         float r;             ///< radio, normalizado respecto a la ALTURA de la pantalla
         int scancode;        ///< tecla que se pulsa al tocarlo
+        const char *label;   ///< etiqueta visible, como en el mando original
         bool is_toggle;      ///< no escribe tecla cada frame, solo avisa al pulsar
         bool pressed;
         int finger;          ///< dedo que lo esta pulsando (-1 = ninguno)
@@ -135,13 +133,8 @@ class TouchControlsClass {
     float stick_x = 0.0f;  ///< desplazamiento actual del pomo (pixeles)
     float stick_y = 0.0f;
     float stick_radius = 0.0f;  ///< radio en pixeles (depende de la pantalla)
-    bool dpad_pressed[4] = {false, false, false, false};
-    bool right_stick_active = false;
-    float right_stick_x = 0.0f;
-    float right_stick_y = 0.0f;
-    /// Zona donde puede nacer el joystick, normalizada.
-    float stick_zone_w = 0.43f;
-    float stick_zone_h = 0.78f;
+    /// Zona izquierda donde puede nacer el joystick flotante, normalizada.
+    float stick_zone_w = 0.42f;
 
     ActionButton actions[ACT_COUNT];
     std::vector<int> pressed_scancodes;
@@ -160,8 +153,8 @@ class TouchControlsClass {
     std::vector<FingerState> fingers;
 
     /// Posicion por defecto del joystick (centro), normalizada.
-    float stick_default_x = 0.25f;
-    float stick_default_y = 0.66f;
+    float stick_default_x = 0.173f;
+    float stick_default_y = 0.741f;
 };
 
 extern TouchControlsClass TouchControls;
