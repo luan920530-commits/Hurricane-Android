@@ -84,8 +84,31 @@ jobs:
           echo "Datos del juego presentes:"
           du -sh Hurrican/data Hurrican/lang
 
-      # Comprobacion barata (segundos) de un fallo que, si no, solo aparece tras compilar:
-      # un fichero que existe en local pero se quedo fuera del repositorio por .gitignore.
+      # Comprobaciones baratas previas al build: evita publicar una APK con los creditos
+      # antiguos o con iconos tactiles que se quedaron fuera del repositorio.
+      - name: Validar créditos Android e iconos táctiles
+        run: |
+          set -eu
+          CREDITS=Hurrican/src/creditStrings.hpp
+          for credit in "Luis Antonio Aguilar" "Asistente" "GitHub"; do
+            if ! grep -Fq "\"$credit\"" "$CREDITS"; then
+              echo "::error::Falta el credito '$credit' en $CREDITS"
+              exit 1
+            fi
+          done
+          if grep -Eiq 'poke53280|www\.poke53280' Hurrican/src/creditStrings.hpp Hurrican/src/CCracktro.cpp Hurrican/src/Menu.cpp Hurrican/lang/*.lng; then
+            echo "::error::Quedó una referencia visible a Poke53280 en los textos distribuidos"
+            exit 1
+          fi
+          for icon in touch_weapon.png touch_powerline.png touch_blitz.png touch_grenade.png touch_fire.png touch_jump.png touch_pause.png touch_settings.png; do
+            if [ ! -s "Hurrican/data/textures/$icon" ]; then
+              echo "::error::Falta el icono táctil Hurrican/data/textures/$icon"
+              exit 1
+            fi
+          done
+
+      # Comprueba también los includes de un fallo que, si no, solo aparece tras compilar:
+      # un fichero que existe en local pero se quedó fuera del repositorio por .gitignore.
       - name: Comprobar que todos los #include apuntan a ficheros del repositorio
         run: python3 .github/scripts/check_includes.py .
 

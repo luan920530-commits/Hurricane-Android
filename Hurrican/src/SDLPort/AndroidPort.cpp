@@ -50,10 +50,9 @@ namespace fs = std::filesystem;
 namespace {
 
 /// Subir este numero cada vez que cambien los datos empaquetados en assets/ o la forma de
-/// copiarlos. La version 2 corresponde al paso de copia basado en hurrican_index.txt: la
-/// version 1 copiaba solo los ficheros sueltos de data/ y lang/, sin subdirectorios, asi
-/// que hay que forzar la recopia.
-constexpr const char *ANDROID_ASSET_VERSION = "2";
+/// copiarlos. La version 2 introdujo el indice para copiar subdirectorios; la version 3
+/// incorporo los iconos tactiles y la version 4 actualiza textos/creditos visibles del juego.
+constexpr const char *ANDROID_ASSET_VERSION = "4";
 
 constexpr const char *LOG_TAG = "Hurrican";
 

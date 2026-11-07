@@ -27,9 +27,9 @@ char CrackText[] = {
 
 char StaticText[] = {
     "                                   "
-    "Hurrican Android edition. Visual design by Luis Antonio Aguilar. "
-    "Programming assisted by Arena.ai. Built with GitHub Actions. "
-    "We hope you enjoy the game!"
+    "Hurrican Android. Diseno grafico: Luis Antonio Aguilar. "
+    "Programacion: asistente. APK compilada con GitHub. "
+    "Disfruta el juego!"
     "                                     "};
 
 char BlinkText[][30] = {"HURRICAN", "ANDROID", "EDITION", "DESIGNED BY",

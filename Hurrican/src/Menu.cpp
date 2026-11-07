@@ -313,12 +313,7 @@ void MenuClass::ShowMenu() {
     if (CommandLineParams.LowRes) {
         // Under Low-res, don't display controls message at bottom and shift other text up a bit
         // Se dejan libres los margenes inferiores en Android/low-res; sin URLs heredadas.
-#if defined(GCW)
-        // Draw port credit text for Pickle & Senquack
-        if (AktuellerZustand == MENUZUSTAND_MAINMENU)
-            pDefaultFont->DrawTextCenterAlign(320.0f, 428, "OpenGL and GCW Zero port by Pickle & Senquack", menucolor,
-                                              0);
-#endif
+
     } else {
         if (AktuellerZustand != MENUPUNKT_CREDITS && AktuellerZustand != MENUZUSTAND_ENTERNAME)
 

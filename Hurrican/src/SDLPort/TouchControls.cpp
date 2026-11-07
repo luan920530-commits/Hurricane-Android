@@ -17,6 +17,7 @@
 #  include <cstdio>
 
 #  include "DX8Graphics.hpp"
+#  include "DX8Sprite.hpp"
 #  include "Globals.hpp"
 #  include "Logdatei.hpp"
 #  include "Main.hpp"
@@ -76,6 +77,30 @@ const ActionDef ACTIONS[] = {
 };
 
 constexpr int ACTION_COUNT = sizeof(ACTIONS) / sizeof(ACTIONS[0]);
+
+// Iconos cargados desde data/textures. La bomba inteligente no tiene PNG nuevo; se usa
+// el primer fotograma del spritesheet de bomba que ya trae el juego.
+struct ActionIconDef {
+    const char *filename;
+    uint16_t texture_w, texture_h;
+    uint16_t frame_w, frame_h;
+    uint16_t frames_x, frames_y;
+};
+
+const ActionIconDef ACTION_ICONS[ACTION_COUNT] = {
+    {"touch_jump.png", 166, 169, 166, 169, 1, 1},       // salto
+    {"touch_fire.png", 164, 168, 164, 168, 1, 1},       // disparo
+    {"touch_blitz.png", 166, 170, 166, 170, 1, 1},     // Blitz
+    {"touch_powerline.png", 166, 169, 166, 169, 1, 1}, // rayo / Powerline
+    {"touch_grenade.png", 168, 170, 168, 170, 1, 1},   // granada
+    {"bombe_big.png", 192, 48, 32, 24, 6, 2},          // bomba inteligente
+    {"touch_weapon.png", 166, 169, 166, 169, 1, 1},    // cambiar arma
+    {"touch_pause.png", 162, 162, 162, 162, 1, 1},     // pausa
+    {"touch_settings.png", 165, 170, 165, 170, 1, 1},  // ajustes
+};
+
+DirectGraphicsSprite g_action_icons[ACTION_COUNT];
+bool g_action_icons_loaded[ACTION_COUNT] = {};
 
 /// Radio del joystick, como fraccion de la altura de la pantalla.
 constexpr float STICK_RADIUS_FRAC = 0.135f;
@@ -252,6 +277,11 @@ void TouchControlsClass::Init() {
         actions[i].is_toggle = ACTIONS[i].toggle;
         actions[i].pressed = false;
         actions[i].finger = -1;
+
+        const ActionIconDef &icon = ACTION_ICONS[i];
+        g_action_icons_loaded[i] = g_action_icons[i].LoadImage(icon.filename, icon.texture_w, icon.texture_h,
+                                                               icon.frame_w, icon.frame_h, icon.frames_x,
+                                                               icon.frames_y);
     }
 
     active = available && enabled;
@@ -690,7 +720,18 @@ void TouchControlsClass::DrawGeometry(const SDL_Rect &screen_rect) {
         DrawDisc(cx, cy, r * 1.04f, r * 1.04f,
                  actions[i].is_toggle ? COLOR_DEBUG_RIM : COLOR_RIM);
         DrawDisc(cx, cy, r * 0.92f, r * 0.92f, fill);
-        DrawActionIcon(*this, i, cx, cy, r * 0.74f, COLOR_ICON);
+
+        if (g_action_icons_loaded[i]) {
+            const ActionIconDef &icon = ACTION_ICONS[i];
+            const float icon_w = r * 1.42f;
+            const float icon_h = icon_w * static_cast<float>(icon.frame_h) / icon.frame_w;
+            const std::uint32_t tint = actions[i].pressed ? 0xFFFFE2A0 : 0xFFFFFFFF;
+            g_action_icons[i].RenderSpriteScaled(static_cast<int>(cx - icon_w * 0.5f),
+                                                  static_cast<int>(cy - icon_h * 0.5f),
+                                                  static_cast<int>(icon_w), static_cast<int>(icon_h), tint);
+        } else {
+            DrawActionIcon(*this, i, cx, cy, r * 0.74f, COLOR_ICON);
+        }
 
         if (editing)
             DrawDisc(cx, cy, r * 0.10f, r * 0.10f, COLOR_EDIT);
