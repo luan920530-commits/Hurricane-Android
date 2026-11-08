@@ -1,6 +1,7 @@
 #include "MapDocument.hpp"
 #include "FileDialogs.hpp"
 #include "ObjectCatalog.hpp"
+#include "ObjectSpriteCatalog.hpp"
 
 #include <SDL.h>
 #include <SDL_image.h>
@@ -10,13 +11,16 @@
 #include "imgui_impl_sdl2.h"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <iterator>
+#include <limits>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -38,14 +42,38 @@ struct AtlasTexture {
     std::string error;
 };
 
+struct ObjectSprite {
+    GLuint texture = 0;
+    int sheet_width = 0;
+    int sheet_height = 0;
+    int frame_width = 0;
+    int frame_height = 0;
+};
+
+struct ObjectSpriteFrame {
+    const ObjectSprite* sprite = nullptr;
+    int column = 0;
+    int row = 0;
+};
+
 struct EditorState {
     MapDocument map;
     std::vector<AtlasTexture> atlases;
+    std::vector<AtlasTexture> object_sprite_textures;
+    std::array<ObjectSprite, 177> object_sprites{};
+    ObjectSprite auxiliary_sprite;
+    std::string object_sprite_directory;
+    std::vector<MapDocument> undo_history;
+    std::vector<MapDocument> redo_history;
+    std::size_t undo_history_bytes = 0;
+    bool paint_stroke_recorded = false;
     bool loaded = false;
     bool dirty = false;
     bool paint_mode = false;
+    bool light_paint_mode = false;
     bool selection_mode = false;
     bool selecting = false;
+    bool light_stroke_recorded = false;
     bool has_clipboard = false;
     int selection_x0 = 0;
     int selection_y0 = 0;
@@ -55,9 +83,15 @@ struct EditorState {
     std::uint32_t clipboard_height = 0;
     std::vector<MapTile> tile_clipboard;
     char object_search[64] = "";
+    char scene_filter[64] = "";
+    std::string selected_asset_filename;
+    bool selected_asset_is_music = false;
     int new_object_id = 1;
     int selected_object = -1;
     int drag_object = -1;
+    int drag_offset_x = 0;
+    int drag_offset_y = 0;
+    bool drag_history_recorded = false;
     int new_map_width = 64;
     int new_map_height = 40;
     char new_tileset_name[64] = "";
@@ -66,10 +100,119 @@ struct EditorState {
     int brush_layer = 0; // 0 = back layer, 1 = front layer
     int brush_tileset = 0; // The .map format stores tileset indices from zero.
     int brush_art = 1; // Art zero is empty; displayed art indices are one-based.
+    int brush_col0 = 0;
+    int brush_row0 = 0;
+    int brush_col1 = 0;
+    int brush_row1 = 0;
+    bool selecting_brush = false;
+    bool brush_erase = false;
+    float light_brush_color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+    int light_brush_radius = 0;
+    bool show_back_layer = true;
+    bool show_front_layer = true;
+    bool show_objects = true;
+    bool show_grid = true;
+    float scene_width = 230.0f;
+    float inspector_width = 350.0f;
+    float bottom_height = 165.0f;
     float zoom = 0.5f;
     char map_path[1024] = "";
     char message[512] = "Escribe la ruta de un archivo .map y pulsa Abrir.";
 };
+
+void LoadAtlases(EditorState& state);
+
+void PushUndoSnapshot(EditorState& state) {
+    if (!state.loaded) return;
+    state.undo_history.push_back(state.map);
+    state.undo_history_bytes += static_cast<std::size_t>(state.map.ExpectedFileSize());
+    state.redo_history.clear();
+    constexpr std::size_t kHistoryLimit = 64u * 1024u * 1024u;
+    constexpr std::size_t kStepLimit = 12;
+    while (state.undo_history.size() > 1 &&
+           (state.undo_history.size() > kStepLimit || state.undo_history_bytes > kHistoryLimit)) {
+        state.undo_history_bytes -= static_cast<std::size_t>(state.undo_history.front().ExpectedFileSize());
+        state.undo_history.erase(state.undo_history.begin());
+    }
+}
+
+void ClearHistory(EditorState& state) {
+    state.undo_history.clear();
+    state.redo_history.clear();
+    state.undo_history_bytes = 0;
+    state.paint_stroke_recorded = false;
+    state.light_stroke_recorded = false;
+    state.drag_history_recorded = false;
+}
+
+void Undo(EditorState& state) {
+    if (state.undo_history.empty()) {
+        std::snprintf(state.message, sizeof(state.message), "No hay cambios para deshacer.");
+        return;
+    }
+    state.redo_history.push_back(state.map);
+    state.undo_history_bytes -= static_cast<std::size_t>(state.undo_history.back().ExpectedFileSize());
+    state.map = std::move(state.undo_history.back());
+    state.undo_history.pop_back();
+    state.dirty = true;
+    state.selected_object = std::clamp(state.selected_object, -1,
+                                        static_cast<int>(state.map.objects.size()) - 1);
+    LoadAtlases(state);
+    std::snprintf(state.message, sizeof(state.message), "Se deshizo el último cambio.");
+}
+
+void Redo(EditorState& state) {
+    if (state.redo_history.empty()) {
+        std::snprintf(state.message, sizeof(state.message), "No hay cambios para rehacer.");
+        return;
+    }
+    state.undo_history.push_back(state.map);
+    state.undo_history_bytes += static_cast<std::size_t>(state.map.ExpectedFileSize());
+    state.map = std::move(state.redo_history.back());
+    state.redo_history.pop_back();
+    constexpr std::size_t kHistoryLimit = 64u * 1024u * 1024u;
+    constexpr std::size_t kStepLimit = 12;
+    while (state.undo_history.size() > 1 &&
+           (state.undo_history.size() > kStepLimit || state.undo_history_bytes > kHistoryLimit)) {
+        state.undo_history_bytes -= static_cast<std::size_t>(state.undo_history.front().ExpectedFileSize());
+        state.undo_history.erase(state.undo_history.begin());
+    }
+    state.dirty = true;
+    state.selected_object = std::clamp(state.selected_object, -1,
+                                        static_cast<int>(state.map.objects.size()) - 1);
+    LoadAtlases(state);
+    std::snprintf(state.message, sizeof(state.message), "Se rehizo el último cambio.");
+}
+
+ObjectSpriteFrame ObjectSpriteFor(const EditorState& state, const MapObject& object) {
+    const ObjectSprite* sprite = nullptr;
+    int column = 0;
+    int row = 0;
+    if (object.id == 18 && object.value2 == 1 && state.auxiliary_sprite.texture != 0) {
+        sprite = &state.auxiliary_sprite;
+        column = std::max(0, object.value1);
+    } else if (object.id < state.object_sprites.size()) {
+        sprite = &state.object_sprites[object.id];
+        if (object.id == 3)
+            column = std::clamp(state.map.appendix.powerblock_id, 0, 100000) * 2 + 1;
+        else if (object.id == 53) {
+            column = 5;
+            row = 1;
+        } else if (object.id == 143) {
+            const int columns = std::max(1, sprite->sheet_width / std::max(1, sprite->frame_width));
+            const int frame = std::max(0, object.value1);
+            column = frame % columns;
+            row = frame / columns;
+        }
+    }
+    if (sprite == nullptr || sprite->texture == 0 || sprite->frame_width <= 0 || sprite->frame_height <= 0)
+        return {};
+    const int columns = std::max(1, sprite->sheet_width / sprite->frame_width);
+    const int rows = std::max(1, sprite->sheet_height / sprite->frame_height);
+    column = std::clamp(column, 0, columns - 1);
+    row = std::clamp(row, 0, rows - 1);
+    return {sprite, column, row};
+}
 
 void CopyToField(char* destination, std::size_t capacity, const char* source, std::size_t source_size) {
     std::size_t source_length = 0;
@@ -85,11 +228,34 @@ void CopyFromField(char* destination, std::size_t capacity, const char* source) 
     std::strncpy(destination, source, capacity - 1);
 }
 
-bool EditFixedText(const char* label, char* field, std::size_t capacity) {
+bool AssignSelectedAsset(EditorState& state, char* field, std::size_t capacity, bool music) {
+    if (state.selected_asset_filename.empty()) {
+        std::snprintf(state.message, sizeof(state.message), "Selecciona primero un archivo en Sistema de archivos.");
+        return false;
+    }
+    if (state.selected_asset_is_music != music) {
+        std::snprintf(state.message, sizeof(state.message), music
+            ? "Selecciona un archivo de música .it."
+            : "Selecciona una textura PNG.");
+        return false;
+    }
+    if (state.selected_asset_filename.size() >= capacity) {
+        std::snprintf(state.message, sizeof(state.message), "El nombre del archivo no cabe en el campo del formato .map.");
+        return false;
+    }
+    PushUndoSnapshot(state);
+    CopyFromField(field, capacity, state.selected_asset_filename.c_str());
+    state.dirty = true;
+    std::snprintf(state.message, sizeof(state.message), "Recurso asignado: %s", state.selected_asset_filename.c_str());
+    return true;
+}
+
+bool EditFixedText(EditorState& state, const char* label, char* field, std::size_t capacity) {
     char buffer[128];
     CopyToField(buffer, sizeof(buffer), field, capacity);
-    if (!ImGui::InputText(label, buffer, sizeof(buffer)))
-        return false;
+    const bool changed = ImGui::InputText(label, buffer, sizeof(buffer));
+    if (ImGui::IsItemActivated()) PushUndoSnapshot(state);
+    if (!changed) return false;
     CopyFromField(field, capacity, buffer);
     return true;
 }
@@ -144,7 +310,7 @@ bool DrawValueChoice(const char* label, int& value, const char* const* choices, 
     return changed;
 }
 
-bool DrawTriggerFields(MapObject& object) {
+bool DrawTriggerFields(EditorState& state, MapObject& object) {
     bool changed = false;
     int value1 = object.value1;
     int value2 = object.value2;
@@ -172,6 +338,14 @@ bool DrawTriggerFields(MapObject& object) {
         "Intacto", "Roto", "Mitad inferior rota", "Mitad superior rota", "Intacto con mutante", "El mutante salta afuera"
     };
     switch (object.id) {
+        case 0: { // Player start position
+            static const char* const directions[] = {"Derecha", "Izquierda"};
+            static const char* const player_slots[] = {"Jugador 1", "Jugador 2"};
+            changed |= DrawValueChoice("Dirección inicial", value1, directions, std::size(directions));
+            changed |= DrawValueChoice("Ranura de jugador", value2, player_slots, std::size(player_slots));
+            ImGui::TextDisabled("El mapa guarda la posición, la dirección y la ranura; no el aspecto del personaje.");
+            break;
+        }
         case 140: // Particle spawner
             changed |= DrawValueChoice("Tipo de partícula", value1, particles, std::size(particles));
             if (ImGui::InputInt("Intervalo de aparición", &value2)) changed = true;
@@ -247,13 +421,15 @@ bool DrawTriggerFields(MapObject& object) {
             break;
     }
     if (changed) {
+        PushUndoSnapshot(state);
         object.value1 = value1;
         object.value2 = value2;
     }
     return changed;
 }
 
-bool DrawObjectTypeCombo(const char* label, std::uint32_t& object_id, char* filter) {
+bool DrawObjectTypeCombo(const char* label, std::uint32_t& object_id, char* filter,
+                         EditorState* history = nullptr) {
     const ObjectDefinition* current = FindObjectDefinition(object_id);
     char preview[128];
     if (current)
@@ -280,6 +456,7 @@ bool DrawObjectTypeCombo(const char* label, std::uint32_t& object_id, char* filt
             char item[128];
             std::snprintf(item, sizeof(item), "%u — %s", definition.id, definition.label);
             if (ImGui::Selectable(item, object_id == definition.id)) {
+                if (history != nullptr) PushUndoSnapshot(*history);
                 object_id = definition.id;
                 changed = true;
             }
@@ -295,6 +472,17 @@ void ReleaseAtlases(EditorState& state) {
             glDeleteTextures(1, &atlas.texture);
     }
     state.atlases.clear();
+}
+
+void ReleaseObjectSprites(EditorState& state) {
+    for (const AtlasTexture& sprite : state.object_sprite_textures) {
+        if (sprite.texture != 0)
+            glDeleteTextures(1, &sprite.texture);
+    }
+    state.object_sprite_textures.clear();
+    state.object_sprites = {};
+    state.auxiliary_sprite = {};
+    state.object_sprite_directory.clear();
 }
 
 std::filesystem::path FindTextureDirectory(const std::filesystem::path& map_path) {
@@ -364,6 +552,63 @@ std::filesystem::path ResolveTexturePath(const std::filesystem::path& directory,
     return std::filesystem::is_regular_file(current) ? current : std::filesystem::path{};
 }
 
+void LoadObjectSprites(EditorState& state) {
+    const std::filesystem::path texture_directory = FindTextureDirectory(state.map_path);
+    const std::filesystem::path map_directory = std::filesystem::path(state.map_path).parent_path();
+    const std::string directory_key = texture_directory.empty() ? map_directory.string() : texture_directory.string();
+    if (state.object_sprite_directory == directory_key && !state.object_sprite_textures.empty()) return;
+    ReleaseObjectSprites(state);
+    state.object_sprite_directory = directory_key;
+    std::unordered_map<std::string, std::size_t> loaded_paths;
+
+    for (const hurrican::editor::ObjectSpriteDefinition& definition : hurrican::editor::kObjectSpriteCatalog) {
+        if (definition.id != 200 && definition.id >= state.object_sprites.size()) continue;
+        std::filesystem::path image_path = ResolveTexturePath(texture_directory, definition.filename);
+        if (image_path.empty()) image_path = ResolveTexturePath(map_directory, definition.filename);
+        if (image_path.empty()) continue;
+
+        const std::string key = image_path.string();
+        std::size_t texture_index = 0;
+        auto existing = loaded_paths.find(key);
+        if (existing != loaded_paths.end()) {
+            texture_index = existing->second;
+        } else {
+            SDL_Surface* source = IMG_Load(key.c_str());
+            if (source == nullptr) continue;
+            SDL_Surface* rgba = SDL_ConvertSurfaceFormat(source, SDL_PIXELFORMAT_RGBA32, 0);
+            SDL_FreeSurface(source);
+            if (rgba == nullptr) continue;
+
+            AtlasTexture sheet;
+            sheet.width = rgba->w;
+            sheet.height = rgba->h;
+            sheet.filename = definition.filename;
+            sheet.source_path = key;
+            glGenTextures(1, &sheet.texture);
+            glBindTexture(GL_TEXTURE_2D, sheet.texture);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, rgba->w, rgba->h, 0,
+                         GL_RGBA, GL_UNSIGNED_BYTE, rgba->pixels);
+            SDL_FreeSurface(rgba);
+            if (sheet.texture == 0) continue;
+            texture_index = state.object_sprite_textures.size();
+            state.object_sprite_textures.push_back(std::move(sheet));
+            loaded_paths.emplace(key, texture_index);
+        }
+
+        const AtlasTexture& sheet = state.object_sprite_textures[texture_index];
+        ObjectSprite& sprite = definition.id == 200 ? state.auxiliary_sprite : state.object_sprites[definition.id];
+        sprite.texture = sheet.texture;
+        sprite.sheet_width = sheet.width;
+        sprite.sheet_height = sheet.height;
+        sprite.frame_width = std::min<int>(definition.frame_width, sheet.width);
+        sprite.frame_height = std::min<int>(definition.frame_height, sheet.height);
+    }
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
 void LoadAtlases(EditorState& state) {
     ReleaseAtlases(state);
     const std::filesystem::path texture_directory = FindTextureDirectory(state.map_path);
@@ -424,6 +669,7 @@ void LoadAtlases(EditorState& state) {
             atlas.error = "OpenGL no pudo crear la textura del atlas.";
     }
     glBindTexture(GL_TEXTURE_2D, 0);
+    LoadObjectSprites(state);
 }
 
 bool LoadMap(EditorState& state) {
@@ -435,6 +681,7 @@ bool LoadMap(EditorState& state) {
     }
     state.map = std::move(loaded);
     state.loaded = true;
+    ClearHistory(state);
     LoadAtlases(state);
     state.dirty = false;
     state.selected_x = 0;
@@ -472,6 +719,7 @@ void CreateNewMap(EditorState& state) {
         return;
     }
     ReleaseAtlases(state);
+    ClearHistory(state);
     state.map = std::move(created);
     state.loaded = state.dirty = true;
     state.selected_x = state.selected_y = 0;
@@ -507,6 +755,7 @@ void PasteClipboard(EditorState& state) {
     if (!state.loaded || !state.has_clipboard || state.tile_clipboard.empty()) return;
     const int base_x = state.selected_x;
     const int base_y = state.selected_y;
+    PushUndoSnapshot(state);
     bool changed = false;
     for (std::uint32_t y = 0; y < state.clipboard_height; ++y) {
         for (std::uint32_t x = 0; x < state.clipboard_width; ++x) {
@@ -531,25 +780,78 @@ void PasteClipboard(EditorState& state) {
     }
 }
 
+bool PaintBrush(EditorState& state, int base_x, int base_y,
+                int clip_x0 = 0, int clip_y0 = 0,
+                int clip_x1 = std::numeric_limits<int>::max(),
+                int clip_y1 = std::numeric_limits<int>::max()) {
+    if (state.map.header.tileset_count == 0) return false;
+    const int brush_x0 = std::clamp(std::min(state.brush_col0, state.brush_col1), 0, 11);
+    const int brush_y0 = std::clamp(std::min(state.brush_row0, state.brush_row1), 0, 11);
+    const int brush_x1 = std::clamp(std::max(state.brush_col0, state.brush_col1), 0, 11);
+    const int brush_y1 = std::clamp(std::max(state.brush_row0, state.brush_row1), 0, 11);
+    const std::uint8_t set = static_cast<std::uint8_t>(std::clamp(
+        state.brush_tileset, 0, static_cast<int>(state.map.header.tileset_count) - 1));
+    bool changed = false;
+    for (int by = brush_y0; by <= brush_y1; ++by) {
+        for (int bx = brush_x0; bx <= brush_x1; ++bx) {
+            const int x = base_x + bx - brush_x0;
+            const int y = base_y + by - brush_y0;
+            if (x < clip_x0 || y < clip_y0 || x > clip_x1 || y > clip_y1 ||
+                x < 0 || y < 0 || x >= static_cast<int>(state.map.width()) ||
+                y >= static_cast<int>(state.map.height())) continue;
+            const int art_index = by * 12 + bx + 1;
+            const std::uint8_t art = state.brush_erase ? 0 : static_cast<std::uint8_t>(art_index);
+            MapTile& tile = state.map.tile(static_cast<std::uint32_t>(x), static_cast<std::uint32_t>(y));
+            std::uint8_t& tile_set = state.brush_layer == 0 ? tile.tileset_back : tile.tileset_front;
+            std::uint8_t& tile_art = state.brush_layer == 0 ? tile.art_back : tile.art_front;
+            if (tile_set != set || tile_art != art) {
+                tile_set = set;
+                tile_art = art;
+                changed = true;
+            }
+        }
+    }
+    state.dirty = state.dirty || changed;
+    return changed;
+}
+
+bool PaintLightBrushAt(EditorState& state, int center_x, int center_y) {
+    const int radius = std::clamp(state.light_brush_radius, 0, 2);
+    const std::uint8_t red = static_cast<std::uint8_t>(std::lround(std::clamp(state.light_brush_color[0], 0.0f, 1.0f) * 255.0f));
+    const std::uint8_t green = static_cast<std::uint8_t>(std::lround(std::clamp(state.light_brush_color[1], 0.0f, 1.0f) * 255.0f));
+    const std::uint8_t blue = static_cast<std::uint8_t>(std::lround(std::clamp(state.light_brush_color[2], 0.0f, 1.0f) * 255.0f));
+    const std::uint8_t alpha = static_cast<std::uint8_t>(std::lround(std::clamp(state.light_brush_color[3], 0.0f, 1.0f) * 255.0f));
+    bool changed = false;
+    for (int y = center_y - radius; y <= center_y + radius; ++y) {
+        for (int x = center_x - radius; x <= center_x + radius; ++x) {
+            if (x < 0 || y < 0 || x >= static_cast<int>(state.map.width()) ||
+                y >= static_cast<int>(state.map.height())) continue;
+            MapTile& tile = state.map.tile(static_cast<std::uint32_t>(x), static_cast<std::uint32_t>(y));
+            if (tile.red != red || tile.green != green || tile.blue != blue || tile.alpha != alpha) {
+                tile.red = red;
+                tile.green = green;
+                tile.blue = blue;
+                tile.alpha = alpha;
+                changed = true;
+            }
+        }
+    }
+    state.dirty = state.dirty || changed;
+    return changed;
+}
+
 void FillSelectionWithBrush(EditorState& state) {
+    if (!state.loaded || state.map.header.tileset_count == 0) return;
+    PushUndoSnapshot(state);
     const int x0 = std::min(state.selection_x0, state.selection_x1);
     const int y0 = std::min(state.selection_y0, state.selection_y1);
     const int x1 = std::max(state.selection_x0, state.selection_x1);
     const int y1 = std::max(state.selection_y0, state.selection_y1);
-    const std::uint8_t set = static_cast<std::uint8_t>(std::clamp(state.brush_tileset, 0, 63));
-    const std::uint8_t art = static_cast<std::uint8_t>(std::clamp(state.brush_art, 0, 144));
-    bool changed = false;
-    for (int y = y0; y <= y1; ++y) for (int x = x0; x <= x1; ++x) {
-        MapTile& tile = state.map.tile(static_cast<std::uint32_t>(x), static_cast<std::uint32_t>(y));
-        std::uint8_t& tile_set = state.brush_layer == 0 ? tile.tileset_back : tile.tileset_front;
-        std::uint8_t& tile_art = state.brush_layer == 0 ? tile.art_back : tile.art_front;
-        if (tile_set != set || tile_art != art) {
-            tile_set = set;
-            tile_art = art;
-            changed = true;
-        }
-    }
-    state.dirty = state.dirty || changed;
+    const int brush_width = std::abs(state.brush_col1 - state.brush_col0) + 1;
+    const int brush_height = std::abs(state.brush_row1 - state.brush_row0) + 1;
+    for (int y = y0; y <= y1; y += brush_height)
+        for (int x = x0; x <= x1; x += brush_width)
+            PaintBrush(state, x, y, x0, y0, x1, y1);
 }
 
 ImU32 TileColor(const MapTile& tile) {
@@ -574,27 +876,88 @@ ImU32 TileColor(const MapTile& tile) {
     return ImGui::ColorConvertFloat4ToU32(color);
 }
 
-float SidebarWidth() {
+float SceneTreeWidth(const EditorState& state) {
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
-    const float desired = std::clamp(viewport->WorkSize.x * 0.30f, 320.0f, 440.0f);
-    return std::min(desired, viewport->WorkSize.x * 0.42f);
+    return std::clamp(state.scene_width, 150.0f, std::max(150.0f, viewport->WorkSize.x * 0.38f));
+}
+
+float InspectorWidth(const EditorState& state) {
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    return std::clamp(state.inspector_width, 230.0f, std::max(230.0f, viewport->WorkSize.x * 0.48f));
+}
+
+float BottomDockHeight(const EditorState& state) {
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    return std::clamp(state.bottom_height, 90.0f, std::max(90.0f, viewport->WorkSize.y * 0.45f));
+}
+
+void ApplyGodotInspiredStyle() {
+    ImGui::StyleColorsDark();
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.WindowRounding = 4.0f;
+    style.ChildRounding = 3.0f;
+    style.FrameRounding = 3.0f;
+    style.PopupRounding = 3.0f;
+    style.ScrollbarRounding = 4.0f;
+    style.GrabRounding = 3.0f;
+    style.TabRounding = 4.0f;
+    style.WindowBorderSize = 1.0f;
+    style.FrameBorderSize = 0.0f;
+    style.ItemSpacing = ImVec2(7.0f, 5.0f);
+
+    ImVec4* colors = style.Colors;
+    colors[ImGuiCol_WindowBg] = ImVec4(0.075f, 0.080f, 0.095f, 1.0f);
+    colors[ImGuiCol_ChildBg] = ImVec4(0.065f, 0.070f, 0.083f, 1.0f);
+    colors[ImGuiCol_PopupBg] = ImVec4(0.090f, 0.095f, 0.110f, 0.98f);
+    colors[ImGuiCol_Border] = ImVec4(0.22f, 0.24f, 0.28f, 1.0f);
+    colors[ImGuiCol_FrameBg] = ImVec4(0.13f, 0.14f, 0.16f, 1.0f);
+    colors[ImGuiCol_FrameBgHovered] = ImVec4(0.18f, 0.22f, 0.27f, 1.0f);
+    colors[ImGuiCol_FrameBgActive] = ImVec4(0.20f, 0.25f, 0.31f, 1.0f);
+    colors[ImGuiCol_Button] = ImVec4(0.16f, 0.19f, 0.23f, 1.0f);
+    colors[ImGuiCol_ButtonHovered] = ImVec4(0.23f, 0.39f, 0.52f, 1.0f);
+    colors[ImGuiCol_ButtonActive] = ImVec4(0.22f, 0.46f, 0.64f, 1.0f);
+    colors[ImGuiCol_Header] = ImVec4(0.15f, 0.24f, 0.32f, 1.0f);
+    colors[ImGuiCol_HeaderHovered] = ImVec4(0.20f, 0.36f, 0.48f, 1.0f);
+    colors[ImGuiCol_HeaderActive] = ImVec4(0.20f, 0.43f, 0.59f, 1.0f);
+    colors[ImGuiCol_Tab] = ImVec4(0.12f, 0.14f, 0.17f, 1.0f);
+    colors[ImGuiCol_TabHovered] = ImVec4(0.22f, 0.42f, 0.57f, 1.0f);
+    colors[ImGuiCol_TabSelected] = ImVec4(0.16f, 0.29f, 0.39f, 1.0f);
+    colors[ImGuiCol_CheckMark] = ImVec4(0.35f, 0.70f, 0.93f, 1.0f);
+    colors[ImGuiCol_SliderGrab] = ImVec4(0.28f, 0.55f, 0.74f, 1.0f);
+    colors[ImGuiCol_SliderGrabActive] = ImVec4(0.38f, 0.68f, 0.88f, 1.0f);
 }
 
 void DrawMapCanvas(EditorState& state) {
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
-    const float sidebar_width = SidebarWidth();
-    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + sidebar_width, viewport->WorkPos.y), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(viewport->WorkSize.x - sidebar_width, viewport->WorkSize.y), ImGuiCond_Always);
+    const float tree_width = SceneTreeWidth(state);
+    const float inspector_width = InspectorWidth(state);
+    const float bottom_height = BottomDockHeight(state);
+    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + tree_width, viewport->WorkPos.y), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(viewport->WorkSize.x - tree_width - inspector_width,
+                                    viewport->WorkSize.y - bottom_height), ImGuiCond_Always);
     constexpr ImGuiWindowFlags fixed_panel = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                              ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings;
     ImGui::Begin("Mapa", nullptr, fixed_panel);
     ImGui::TextDisabled("Usa los atlas de texturas del juego; los archivos que falten se indicarán aquí.");
-    if (ImGui::Checkbox("Pincel", &state.paint_mode) && state.paint_mode) {
+    if (ImGui::Checkbox("Pincel de tiles", &state.paint_mode) && state.paint_mode) {
+        state.light_paint_mode = false;
         state.selection_mode = false;
         state.selecting = false;
     }
     ImGui::SameLine();
-    ImGui::SliderFloat("Zoom", &state.zoom, 0.20f, 2.0f, "%.2fx");
+    if (ImGui::Checkbox("Pincel de luz", &state.light_paint_mode) && state.light_paint_mode) {
+        state.paint_mode = false;
+        state.selection_mode = false;
+        state.selecting = false;
+    }
+    ImGui::SameLine();
+    if (ImGui::Checkbox("Selección", &state.selection_mode) && state.selection_mode) {
+        state.paint_mode = false;
+        state.light_paint_mode = false;
+        state.selecting = false;
+    }
+    ImGui::SameLine();
+    ImGui::SliderFloat("Ampliación", &state.zoom, 0.20f, 2.0f, "%.2fx");
 
     if (!state.loaded) {
         ImGui::TextWrapped("Abre un archivo .map de Hurrican para verlo y editarlo.");
@@ -643,9 +1006,9 @@ void DrawMapCanvas(EditorState& state) {
                 draw->AddImage(static_cast<ImTextureID>(atlas.texture), p0, p1,
                                ImVec2(u0, v0), ImVec2(u1, v1), tint);
             };
-            draw_layer(tile.tileset_back, tile.art_back);
-            draw_layer(tile.tileset_front, tile.art_front);
-            if (cell >= 18.0f)
+            if (state.show_back_layer) draw_layer(tile.tileset_back, tile.art_back);
+            if (state.show_front_layer) draw_layer(tile.tileset_front, tile.art_front);
+            if (state.show_grid && cell >= 18.0f)
                 draw->AddRect(p0, p1, IM_COL32(12, 15, 20, 90));
             if (x == state.selected_x && y == state.selected_y)
                 draw->AddRect(p0, p1, IM_COL32(255, 224, 80, 255), 0.0f, 0, 2.0f);
@@ -662,21 +1025,95 @@ void DrawMapCanvas(EditorState& state) {
         draw->AddRectFilled(p0, p1, IM_COL32(60, 170, 255, 35));
         draw->AddRect(p0, p1, IM_COL32(70, 190, 255, 240), 0.0f, 0, 2.0f);
     }
-    for (std::size_t i = 0; i < state.map.objects.size(); ++i) {
-        const MapObject& object = state.map.objects[i];
-        const ImVec2 center(origin.x + (object.x / 20.0f + 0.5f) * cell,
-                            origin.y + (object.y / 20.0f + 0.5f) * cell);
-        if (center.x < clip_min.x || center.y < clip_min.y || center.x > clip_max.x || center.y > clip_max.y)
-            continue;
-        const float radius = std::max(4.0f, cell * 0.32f);
-        draw->AddCircleFilled(center, radius,
-            object.id == 0 ? IM_COL32(80, 240, 130, 255) : IM_COL32(255, 170, 60, 255));
-        if (static_cast<int>(i) == state.selected_object)
-            draw->AddCircle(center, radius + 2.0f, IM_COL32_WHITE, 0, 2.0f);
-        if (cell >= 24.0f) {
-            const std::string label = object.id == 0 ? "P" : std::to_string(object.id);
-            draw->AddText(ImVec2(center.x + radius, center.y - radius), IM_COL32_WHITE, label.c_str());
+    if (state.paint_mode && hovered && state.map.header.tileset_count > 0) {
+        const ImVec2 mouse = ImGui::GetIO().MousePos;
+        const int x = static_cast<int>((mouse.x - origin.x) / cell);
+        const int y = static_cast<int>((mouse.y - origin.y) / cell);
+        if (x >= 0 && y >= 0 && x < static_cast<int>(state.map.width()) &&
+            y < static_cast<int>(state.map.height())) {
+            const int brush_width = std::abs(state.brush_col1 - state.brush_col0) + 1;
+            const int brush_height = std::abs(state.brush_row1 - state.brush_row0) + 1;
+            const ImVec2 p0(origin.x + x * cell, origin.y + y * cell);
+            const ImVec2 p1(origin.x + std::min(x + brush_width, static_cast<int>(state.map.width())) * cell,
+                            origin.y + std::min(y + brush_height, static_cast<int>(state.map.height())) * cell);
+            draw->AddRect(p0, p1, IM_COL32(255, 248, 110, 240), 0.0f, 0, 2.0f);
         }
+    }
+    if (state.light_paint_mode && hovered) {
+        const ImVec2 mouse = ImGui::GetIO().MousePos;
+        const int x = static_cast<int>((mouse.x - origin.x) / cell);
+        const int y = static_cast<int>((mouse.y - origin.y) / cell);
+        const int radius = std::clamp(state.light_brush_radius, 0, 2);
+        if (x >= 0 && y >= 0 && x < static_cast<int>(state.map.width()) &&
+            y < static_cast<int>(state.map.height())) {
+            const int x0 = std::max(0, x - radius);
+            const int y0 = std::max(0, y - radius);
+            const int x1 = std::min(static_cast<int>(state.map.width()), x + radius + 1);
+            const int y1 = std::min(static_cast<int>(state.map.height()), y + radius + 1);
+            const ImVec2 p0(origin.x + x0 * cell, origin.y + y0 * cell);
+            const ImVec2 p1(origin.x + x1 * cell, origin.y + y1 * cell);
+            draw->AddRectFilled(p0, p1, IM_COL32(255, 225, 110, 24));
+            draw->AddRect(p0, p1, IM_COL32(255, 225, 110, 230), 0.0f, 0, 2.0f);
+        }
+    }
+    if (state.show_objects) {
+      for (std::size_t i = 0; i < state.map.objects.size(); ++i) {
+        const MapObject& object = state.map.objects[i];
+        if (object.id == 171 && object.value1 > 0 && object.value2 > 0) {
+            const float width = object.value1 * cell / 20.0f;
+            const float height = object.value2 * cell / 20.0f;
+            const ImVec2 region_min(origin.x + (object.x + 20.0f - object.value1 / 2.0f) * cell / 20.0f,
+                                    origin.y + (object.y + 20.0f - object.value2 / 2.0f) * cell / 20.0f);
+            const ImVec2 region_max(region_min.x + width, region_min.y + height);
+            if (region_max.x >= clip_min.x && region_max.y >= clip_min.y &&
+                region_min.x <= clip_max.x && region_min.y <= clip_max.y) {
+                draw->AddRectFilled(region_min, region_max, IM_COL32(255, 40, 45, 50));
+                draw->AddRect(region_min, region_max, IM_COL32(255, 80, 80, 210));
+            }
+        }
+        const ObjectSpriteFrame sprite_frame = ObjectSpriteFor(state, object);
+        if (sprite_frame.sprite != nullptr) {
+            const ObjectSprite& sprite = *sprite_frame.sprite;
+            const ImVec2 p0(origin.x + object.x * cell / 20.0f,
+                            origin.y + object.y * cell / 20.0f);
+            const ImVec2 p1(p0.x + sprite.frame_width * cell / 20.0f,
+                            p0.y + sprite.frame_height * cell / 20.0f);
+            if (p1.x < clip_min.x || p1.y < clip_min.y || p0.x > clip_max.x || p0.y > clip_max.y)
+                continue;
+            const ImVec2 uv0(static_cast<float>(sprite_frame.column * sprite.frame_width) / sprite.sheet_width,
+                             static_cast<float>(sprite_frame.row * sprite.frame_height) / sprite.sheet_height);
+            const ImVec2 uv1(static_cast<float>((sprite_frame.column + 1) * sprite.frame_width) / sprite.sheet_width,
+                             static_cast<float>((sprite_frame.row + 1) * sprite.frame_height) / sprite.sheet_height);
+            ImU32 tint = IM_COL32_WHITE;
+            if (object.change_light != 0) {
+                const int light_x = (object.x + sprite.frame_width / 2) / 20;
+                const int light_y = (object.y + sprite.frame_height / 2) / 20;
+                if (light_x >= 0 && light_y >= 0 && light_x < static_cast<int>(state.map.width()) &&
+                    light_y < static_cast<int>(state.map.height())) {
+                    const MapTile& light = state.map.tile(static_cast<std::uint32_t>(light_x),
+                                                          static_cast<std::uint32_t>(light_y));
+                    tint = IM_COL32(light.red, light.green, light.blue, 255);
+                }
+            }
+            draw->AddImage(static_cast<ImTextureID>(sprite.texture), p0, p1, uv0, uv1, tint);
+            if (static_cast<int>(i) == state.selected_object)
+                draw->AddRect(p0, p1, IM_COL32(255, 245, 120, 255), 0.0f, 0, 2.0f);
+        } else {
+            const ImVec2 center(origin.x + (object.x / 20.0f + 0.5f) * cell,
+                                origin.y + (object.y / 20.0f + 0.5f) * cell);
+            if (center.x < clip_min.x || center.y < clip_min.y || center.x > clip_max.x || center.y > clip_max.y)
+                continue;
+            const float radius = std::max(4.0f, cell * 0.32f);
+            draw->AddCircleFilled(center, radius,
+                object.id == 0 ? IM_COL32(80, 240, 130, 255) : IM_COL32(255, 170, 60, 255));
+            if (static_cast<int>(i) == state.selected_object)
+                draw->AddCircle(center, radius + 2.0f, IM_COL32_WHITE, 0, 2.0f);
+            if (cell >= 24.0f) {
+                const std::string label = object.id == 0 ? "P" : std::to_string(object.id);
+                draw->AddText(ImVec2(center.x + radius, center.y - radius), IM_COL32_WHITE, label.c_str());
+            }
+        }
+      }
     }
 
     if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
@@ -694,31 +1131,54 @@ void DrawMapCanvas(EditorState& state) {
                 state.selected_object = -1;
                 state.drag_object = -1;
             } else if (state.paint_mode) {
-                MapTile& tile = state.map.tile(static_cast<std::uint32_t>(x), static_cast<std::uint32_t>(y));
-                if (state.brush_layer == 0) {
-                    tile.tileset_back = static_cast<std::uint8_t>(std::clamp(state.brush_tileset, 0, 63));
-                    tile.art_back = static_cast<std::uint8_t>(std::clamp(state.brush_art, 0, 144));
-                } else {
-                    tile.tileset_front = static_cast<std::uint8_t>(std::clamp(state.brush_tileset, 0, 63));
-                    tile.art_front = static_cast<std::uint8_t>(std::clamp(state.brush_art, 0, 144));
+                if (!state.paint_stroke_recorded) {
+                    PushUndoSnapshot(state);
+                    state.paint_stroke_recorded = true;
                 }
-                state.dirty = true;
+                PaintBrush(state, x, y);
+            } else if (state.light_paint_mode) {
+                if (!state.light_stroke_recorded) {
+                    PushUndoSnapshot(state);
+                    state.light_stroke_recorded = true;
+                }
+                PaintLightBrushAt(state, x, y);
             } else {
                 state.selected_object = -1;
                 state.drag_object = -1;
                 const float hit_radius = std::max(10.0f, cell * 0.55f);
-                float nearest = hit_radius;
-                for (std::size_t i = 0; i < state.map.objects.size(); ++i) {
+                float nearest = std::numeric_limits<float>::max();
+                for (std::size_t i = 0; state.show_objects && i < state.map.objects.size(); ++i) {
                     const MapObject& object = state.map.objects[i];
-                    const ImVec2 center(origin.x + (object.x / 20.0f + 0.5f) * cell,
-                                        origin.y + (object.y / 20.0f + 0.5f) * cell);
-                    const float distance = std::hypot(mouse.x - center.x, mouse.y - center.y);
-                    if (distance <= nearest) {
+                    float distance = std::numeric_limits<float>::max();
+                    const ObjectSpriteFrame sprite_frame = ObjectSpriteFor(state, object);
+                    if (sprite_frame.sprite != nullptr) {
+                        const ObjectSprite& sprite = *sprite_frame.sprite;
+                        const ImVec2 p0(origin.x + object.x * cell / 20.0f,
+                                        origin.y + object.y * cell / 20.0f);
+                        const ImVec2 p1(p0.x + sprite.frame_width * cell / 20.0f,
+                                        p0.y + sprite.frame_height * cell / 20.0f);
+                        if (mouse.x >= p0.x && mouse.y >= p0.y && mouse.x <= p1.x && mouse.y <= p1.y)
+                            distance = std::hypot(mouse.x - (p0.x + p1.x) * 0.5f,
+                                                  mouse.y - (p0.y + p1.y) * 0.5f);
+                    } else {
+                        const ImVec2 center(origin.x + (object.x / 20.0f + 0.5f) * cell,
+                                            origin.y + (object.y / 20.0f + 0.5f) * cell);
+                        const float candidate = std::hypot(mouse.x - center.x, mouse.y - center.y);
+                        if (candidate <= hit_radius) distance = candidate;
+                    }
+                    if (distance < nearest) {
                         nearest = distance;
                         state.selected_object = static_cast<int>(i);
                     }
                 }
                 state.drag_object = state.selected_object;
+                if (state.drag_object >= 0) {
+                    const MapObject& object = state.map.objects[static_cast<std::size_t>(state.drag_object)];
+                    state.drag_offset_x = static_cast<int>(std::lround(
+                        (mouse.x - (origin.x + object.x * cell / 20.0f)) * 20.0f / cell));
+                    state.drag_offset_y = static_cast<int>(std::lround(
+                        (mouse.y - (origin.y + object.y * cell / 20.0f)) * 20.0f / cell));
+                }
             }
         }
     }
@@ -729,30 +1189,31 @@ void DrawMapCanvas(EditorState& state) {
         state.selection_y1 = std::clamp(static_cast<int>((mouse.y - origin.y) / cell), 0,
                                         static_cast<int>(state.map.height()) - 1);
     }
-    if (state.paint_mode && hovered && ImGui::IsItemActive() && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+    if ((state.paint_mode || state.light_paint_mode) && hovered && ImGui::IsItemActive() &&
+        ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
         const ImVec2 mouse = ImGui::GetIO().MousePos;
         const int x = static_cast<int>((mouse.x - origin.x) / cell);
         const int y = static_cast<int>((mouse.y - origin.y) / cell);
-        if (x >= 0 && y >= 0 && x < static_cast<int>(state.map.width()) && y < static_cast<int>(state.map.height())) {
-            MapTile& tile = state.map.tile(static_cast<std::uint32_t>(x), static_cast<std::uint32_t>(y));
-            const std::uint8_t set = static_cast<std::uint8_t>(std::clamp(state.brush_tileset, 0, 63));
-            const std::uint8_t art = static_cast<std::uint8_t>(std::clamp(state.brush_art, 0, 144));
-            std::uint8_t& tile_set = state.brush_layer == 0 ? tile.tileset_back : tile.tileset_front;
-            std::uint8_t& tile_art = state.brush_layer == 0 ? tile.art_back : tile.art_front;
-            if (tile_set != set || tile_art != art) {
-                tile_set = set;
-                tile_art = art;
-                state.dirty = true;
-            }
+        if (x >= 0 && y >= 0 && x < static_cast<int>(state.map.width()) &&
+            y < static_cast<int>(state.map.height())) {
+            if (state.paint_mode) PaintBrush(state, x, y);
+            else PaintLightBrushAt(state, x, y);
         }
     }
     if (state.drag_object >= 0 && ImGui::IsMouseDown(ImGuiMouseButton_Left) && hovered) {
         const ImVec2 mouse = ImGui::GetIO().MousePos;
-        const int x = std::clamp(static_cast<int>((mouse.x - origin.x) / cell), 0, static_cast<int>(state.map.width()) - 1);
-        const int y = std::clamp(static_cast<int>((mouse.y - origin.y) / cell), 0, static_cast<int>(state.map.height()) - 1);
+        const int map_x = static_cast<int>(std::lround((mouse.x - origin.x) * 20.0f / cell)) - state.drag_offset_x;
+        const int map_y = static_cast<int>(std::lround((mouse.y - origin.y) * 20.0f / cell)) - state.drag_offset_y;
+        const int max_x = static_cast<int>(state.map.width()) * 20 - 20;
+        const int max_y = static_cast<int>(state.map.height()) * 20 - 20;
+        const std::int32_t new_x = std::clamp(static_cast<int>(std::lround(map_x / 20.0f)) * 20, 0, max_x);
+        const std::int32_t new_y = std::clamp(static_cast<int>(std::lround(map_y / 20.0f)) * 20, 0, max_y);
         MapObject& object = state.map.objects[static_cast<std::size_t>(state.drag_object)];
-        const std::int32_t new_x = x * 20, new_y = y * 20;
         if (object.x != new_x || object.y != new_y) {
+            if (!state.drag_history_recorded) {
+                PushUndoSnapshot(state);
+                state.drag_history_recorded = true;
+            }
             object.x = new_x;
             object.y = new_y;
             state.dirty = true;
@@ -761,6 +1222,92 @@ void DrawMapCanvas(EditorState& state) {
     if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
         state.drag_object = -1;
         state.selecting = false;
+        state.paint_stroke_recorded = false;
+        state.light_stroke_recorded = false;
+        state.drag_history_recorded = false;
+    }
+    ImGui::EndChild();
+    ImGui::End();
+}
+
+void DrawSceneTree(EditorState& state) {
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    const float tree_width = SceneTreeWidth(state);
+    const float bottom_height = BottomDockHeight(state);
+    ImGui::SetNextWindowPos(viewport->WorkPos, ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(tree_width, viewport->WorkSize.y - bottom_height), ImGuiCond_Always);
+    constexpr ImGuiWindowFlags panel_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+                                             ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings;
+    ImGui::Begin("Escena", nullptr, panel_flags);
+    if (!state.loaded) {
+        ImGui::TextDisabled("Abre un mapa para ver sus capas y entidades.");
+        ImGui::End();
+        return;
+    }
+
+    char description[101];
+    CopyToField(description, sizeof(description), state.map.header.description,
+                sizeof(state.map.header.description));
+    if (ImGui::TreeNodeEx("Nivel", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::TextWrapped("%s", description[0] ? description : "Mapa sin descripción");
+        ImGui::TextDisabled("%u × %u tiles · %zu entidades", state.map.width(), state.map.height(),
+                            state.map.objects.size());
+        ImGui::TreePop();
+    }
+    if (ImGui::TreeNodeEx("Capas", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Checkbox("Fondo", &state.show_back_layer);
+        ImGui::Checkbox("Frente", &state.show_front_layer);
+        ImGui::Checkbox("Objetos y enemigos", &state.show_objects);
+        ImGui::Checkbox("Cuadrícula", &state.show_grid);
+        ImGui::TreePop();
+    }
+
+    ImGui::Separator();
+    ImGui::InputTextWithHint("##filtro-escena", "Filtrar entidades…", state.scene_filter,
+                             sizeof(state.scene_filter));
+    ImGui::BeginChild("SceneTreeObjects", ImVec2(0, 0), false);
+    static constexpr ObjectCategory categories[] = {
+        ObjectCategory::ItemOrEnemy, ObjectCategory::Boss,
+        ObjectCategory::LevelObject, ObjectCategory::RuntimeOnly
+    };
+    for (ObjectCategory category : categories) {
+        std::size_t visible = 0;
+        for (const MapObject& object : state.map.objects) {
+            const ObjectDefinition* definition = FindObjectDefinition(object.id);
+            const ObjectCategory item_category = definition ? definition->category : ObjectCategory::RuntimeOnly;
+            const bool matches = definition ? ObjectMatchesFilter(*definition, state.scene_filter)
+                                            : (state.scene_filter[0] == '\0' ||
+                                               std::to_string(object.id).find(state.scene_filter) != std::string::npos);
+            if (item_category == category && matches) ++visible;
+        }
+        if (visible == 0) continue;
+        char heading[96];
+        std::snprintf(heading, sizeof(heading), "%s (%zu)", ObjectCategoryLabel(category), visible);
+        ImGui::PushID(static_cast<int>(category));
+        if (ImGui::TreeNodeEx(heading, ImGuiTreeNodeFlags_DefaultOpen)) {
+            for (std::size_t i = 0; i < state.map.objects.size(); ++i) {
+                const MapObject& object = state.map.objects[i];
+                const ObjectDefinition* definition = FindObjectDefinition(object.id);
+                const ObjectCategory item_category = definition ? definition->category : ObjectCategory::RuntimeOnly;
+                const bool matches = definition ? ObjectMatchesFilter(*definition, state.scene_filter)
+                                                : (state.scene_filter[0] == '\0' ||
+                                                   std::to_string(object.id).find(state.scene_filter) != std::string::npos);
+                if (item_category != category || !matches) continue;
+                char label[160];
+                std::snprintf(label, sizeof(label), "%zu  %u — %.72s", i, object.id,
+                              definition ? definition->label : "Tipo desconocido");
+                ImGui::PushID(static_cast<int>(i));
+                if (ImGui::Selectable(label, state.selected_object == static_cast<int>(i))) {
+                    state.selected_object = static_cast<int>(i);
+                    state.paint_mode = false;
+                    state.light_paint_mode = false;
+                    state.selection_mode = false;
+                }
+                ImGui::PopID();
+            }
+            ImGui::TreePop();
+        }
+        ImGui::PopID();
     }
     ImGui::EndChild();
     ImGui::End();
@@ -768,11 +1315,14 @@ void DrawMapCanvas(EditorState& state) {
 
 void DrawInspector(EditorState& state) {
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(viewport->WorkPos, ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(SidebarWidth(), viewport->WorkSize.y), ImGuiCond_Always);
+    const float inspector_width = InspectorWidth(state);
+    const float bottom_height = BottomDockHeight(state);
+    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + viewport->WorkSize.x - inspector_width,
+                                   viewport->WorkPos.y), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(inspector_width, viewport->WorkSize.y - bottom_height), ImGuiCond_Always);
     constexpr ImGuiWindowFlags fixed_panel = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                                              ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings;
-    ImGui::Begin("Herramientas y propiedades", nullptr, fixed_panel);
+    ImGui::Begin("Inspector", nullptr, fixed_panel);
     ImGui::InputText("Ruta del mapa", state.map_path, sizeof(state.map_path));
     if (ImGui::Button("Abrir…")) {
         if (state.dirty)
@@ -793,7 +1343,7 @@ void DrawInspector(EditorState& state) {
     ImGui::EndDisabled();
 
     ImGui::Separator();
-    ImGui::TextWrapped("%s%s", state.message, state.dirty ? "  [modified]" : "");
+    ImGui::TextWrapped("%s%s", state.message, state.dirty ? "  [modificado]" : "");
     if (!state.loaded) {
         ImGui::End();
         return;
@@ -805,12 +1355,16 @@ void DrawInspector(EditorState& state) {
     char description[101];
     CopyToField(description, sizeof(description), state.map.header.description,
                 sizeof(state.map.header.description));
-    if (ImGui::InputText("Descripción", description, sizeof(description))) {
+    const bool description_changed = ImGui::InputText("Descripción", description, sizeof(description));
+    if (ImGui::IsItemActivated()) PushUndoSnapshot(state);
+    if (description_changed) {
         CopyFromField(state.map.header.description, sizeof(state.map.header.description), description);
         state.dirty = true;
     }
     int time_limit = static_cast<int>(state.map.header.time_limit);
-    if (ImGui::InputInt("Límite de tiempo", &time_limit)) {
+    const bool time_limit_changed = ImGui::InputInt("Límite de tiempo", &time_limit);
+    if (ImGui::IsItemActivated()) PushUndoSnapshot(state);
+    if (time_limit_changed) {
         state.map.header.time_limit = static_cast<std::uint32_t>(std::max(0, time_limit));
         state.dirty = true;
     }
@@ -818,19 +1372,36 @@ void DrawInspector(EditorState& state) {
 
     ImGui::SeparatorText("Fondo y recursos del nivel");
     bool header_changed = false;
-    header_changed |= EditFixedText("Imagen de fondo", state.map.header.background_file,
+    header_changed |= EditFixedText(state, "Imagen de fondo", state.map.header.background_file,
                                     sizeof(state.map.header.background_file));
-    header_changed |= EditFixedText("Paralaje A", state.map.header.parallax_a_file,
+    header_changed |= EditFixedText(state, "Paralaje A", state.map.header.parallax_a_file,
                                     sizeof(state.map.header.parallax_a_file));
-    header_changed |= EditFixedText("Paralaje B", state.map.header.parallax_b_file,
+    header_changed |= EditFixedText(state, "Paralaje B", state.map.header.parallax_b_file,
                                     sizeof(state.map.header.parallax_b_file));
-    header_changed |= EditFixedText("Capa de nubes", state.map.header.cloud_file,
+    header_changed |= EditFixedText(state, "Capa de nubes", state.map.header.cloud_file,
                                     sizeof(state.map.header.cloud_file));
     bool scroll_background = state.map.header.scroll_background != 0;
     if (ImGui::Checkbox("Desplazar el fondo", &scroll_background)) {
+        PushUndoSnapshot(state);
         state.map.header.scroll_background = scroll_background ? 1 : 0;
         header_changed = true;
     }
+    if (!state.selected_asset_filename.empty() && !state.selected_asset_is_music)
+        ImGui::TextDisabled("PNG seleccionado: %s", state.selected_asset_filename.c_str());
+    if (ImGui::SmallButton("Asignar fondo"))
+        header_changed |= AssignSelectedAsset(state, state.map.header.background_file,
+                                               sizeof(state.map.header.background_file), false);
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Paralaje A"))
+        header_changed |= AssignSelectedAsset(state, state.map.header.parallax_a_file,
+                                               sizeof(state.map.header.parallax_a_file), false);
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Paralaje B"))
+        header_changed |= AssignSelectedAsset(state, state.map.header.parallax_b_file,
+                                               sizeof(state.map.header.parallax_b_file), false);
+    if (ImGui::SmallButton("Nubes"))
+        header_changed |= AssignSelectedAsset(state, state.map.header.cloud_file,
+                                               sizeof(state.map.header.cloud_file), false);
     if (header_changed) state.dirty = true;
 
     ImGui::SeparatorText("Archivos de tileset (índices 0–63)");
@@ -846,7 +1417,7 @@ void DrawInspector(EditorState& state) {
             ImGui::Text("%02d", i);
             ImGui::TableSetColumnIndex(1);
             ImGui::PushID(i);
-            if (EditFixedText("##nombre-tileset", state.map.header.tileset_names[i],
+            if (EditFixedText(state, "##nombre-tileset", state.map.header.tileset_names[i],
                               sizeof(state.map.header.tileset_names[i]))) {
                 tilesets_changed = true;
                 state.dirty = true;
@@ -867,12 +1438,15 @@ void DrawInspector(EditorState& state) {
     if (state.map.header.tileset_count < 64) {
         ImGui::InputText("PNG nuevo (nombre del archivo)", state.new_tileset_name, sizeof(state.new_tileset_name));
         if (ImGui::Button("Añadir tileset") && state.new_tileset_name[0] != '\0') {
+            PushUndoSnapshot(state);
             const std::size_t new_index = state.map.header.tileset_count;
             CopyFromField(state.map.header.tileset_names[new_index],
                           sizeof(state.map.header.tileset_names[0]), state.new_tileset_name);
             state.brush_tileset = static_cast<int>(new_index);
             ++state.map.header.tileset_count;
             state.brush_art = 1;
+            state.brush_col0 = state.brush_col1 = 0;
+            state.brush_row0 = state.brush_row1 = 0;
             state.new_tileset_name[0] = '\0';
             tilesets_changed = true;
             state.dirty = true;
@@ -882,17 +1456,29 @@ void DrawInspector(EditorState& state) {
 
     ImGui::SeparatorText("Música, líquidos y extras");
     bool appendix_changed = false;
-    appendix_changed |= EditFixedText("Música del nivel (.it)", state.map.appendix.songs[0], sizeof(state.map.appendix.songs[0]));
-    appendix_changed |= EditFixedText("Música del jefe (.it)", state.map.appendix.songs[1], sizeof(state.map.appendix.songs[1]));
+    appendix_changed |= EditFixedText(state, "Música del nivel (.it)", state.map.appendix.songs[0], sizeof(state.map.appendix.songs[0]));
+    appendix_changed |= EditFixedText(state, "Música del jefe (.it)", state.map.appendix.songs[1], sizeof(state.map.appendix.songs[1]));
+    if (!state.selected_asset_filename.empty() && state.selected_asset_is_music)
+        ImGui::TextDisabled("Música seleccionada: %s", state.selected_asset_filename.c_str());
+    if (ImGui::SmallButton("Usar música de nivel"))
+        appendix_changed |= AssignSelectedAsset(state, state.map.appendix.songs[0],
+                                                 sizeof(state.map.appendix.songs[0]), true);
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Usar música de jefe"))
+        appendix_changed |= AssignSelectedAsset(state, state.map.appendix.songs[1],
+                                                 sizeof(state.map.appendix.songs[1]), true);
     int powerblock = state.map.appendix.powerblock_id;
-    if (ImGui::InputInt("ID del bloque de poder", &powerblock)) {
+    const bool powerblock_changed = ImGui::InputInt("ID del bloque de poder", &powerblock);
+    if (ImGui::IsItemActivated()) PushUndoSnapshot(state);
+    if (powerblock_changed) {
         state.map.appendix.powerblock_id = powerblock;
         appendix_changed = true;
     }
-    appendix_changed |= EditFixedText("Color de líquido 1", state.map.appendix.liquid_color_1, sizeof(state.map.appendix.liquid_color_1));
-    appendix_changed |= EditFixedText("Color de líquido 2", state.map.appendix.liquid_color_2, sizeof(state.map.appendix.liquid_color_2));
+    appendix_changed |= EditFixedText(state, "Color de líquido 1", state.map.appendix.liquid_color_1, sizeof(state.map.appendix.liquid_color_1));
+    appendix_changed |= EditFixedText(state, "Color de líquido 2", state.map.appendix.liquid_color_2, sizeof(state.map.appendix.liquid_color_2));
     bool flashlight = state.map.appendix.flashlight != 0;
     if (ImGui::Checkbox("Efecto de linterna", &flashlight)) {
+        PushUndoSnapshot(state);
         state.map.appendix.flashlight = flashlight ? 1 : 0;
         appendix_changed = true;
     }
@@ -919,37 +1505,92 @@ void DrawInspector(EditorState& state) {
                 char name[96];
                 std::snprintf(name, sizeof(name), "%02d — %.64s", i, display_name);
                 const bool selected = state.brush_tileset == i;
-                if (ImGui::Selectable(name, selected)) state.brush_tileset = i;
+                if (ImGui::Selectable(name, selected)) {
+                    state.brush_tileset = i;
+                    state.brush_art = 1;
+                    state.brush_col0 = state.brush_col1 = 0;
+                    state.brush_row0 = state.brush_row1 = 0;
+                    state.brush_erase = false;
+                }
                 if (selected) ImGui::SetItemDefaultFocus();
             }
             ImGui::EndCombo();
         }
     }
     state.brush_art = std::clamp(state.brush_art, 0, 144);
-    ImGui::InputInt("Gráfico (0 = vacío; 1–144)", &state.brush_art);
-    state.brush_art = std::clamp(state.brush_art, 0, 144);
+    int requested_art = state.brush_art;
+    if (ImGui::InputInt("Gráfico inicial (1–144)", &requested_art)) {
+        state.brush_art = std::clamp(requested_art, 0, 144);
+        state.brush_erase = state.brush_art == 0;
+        if (state.brush_art > 0) {
+            const int cell_index = state.brush_art - 1;
+            state.brush_col0 = state.brush_col1 = cell_index % 12;
+            state.brush_row0 = state.brush_row1 = cell_index / 12;
+        }
+    }
     ImGui::SameLine();
-    if (ImGui::SmallButton("Borrar")) state.brush_art = 0;
+    ImGui::Checkbox("Borrador", &state.brush_erase);
 
     if (state.brush_tileset >= 0 && state.brush_tileset < static_cast<int>(state.atlases.size())) {
         const AtlasTexture& palette = state.atlases[static_cast<std::size_t>(state.brush_tileset)];
         if (palette.texture != 0) {
             ImGui::TextDisabled("%02d — %s", state.brush_tileset, palette.filename.c_str());
             ImGui::TextDisabled("Ruta: %s", palette.source_path.c_str());
-            ImGui::TextDisabled("Haz clic en una celda para elegirla; el índice de datos empieza en 1.");
+            ImGui::TextDisabled("Arrastra sobre el atlas para elegir un pincel rectangular; los índices empiezan en 1.");
             const float scale = std::min(256.0f / palette.width, 256.0f / palette.height);
             const ImVec2 preview_size(palette.width * scale, palette.height * scale);
             ImGui::Image(static_cast<ImTextureID>(palette.texture), preview_size);
-            if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-                const ImVec2 top_left = ImGui::GetItemRectMin();
-                const ImVec2 mouse = ImGui::GetIO().MousePos;
-                const int atlas_x = static_cast<int>((mouse.x - top_left.x) * palette.width / preview_size.x);
-                const int atlas_y = static_cast<int>((mouse.y - top_left.y) * palette.height / preview_size.y);
-                const int col = atlas_x / 20;
-                const int row = atlas_y / 20;
-                if (col >= 0 && col < 12 && row >= 0 && row < 12)
-                    state.brush_art = row * 12 + col + 1;
+            const ImVec2 image_min = ImGui::GetItemRectMin();
+            const ImVec2 image_max = ImGui::GetItemRectMax();
+            const bool image_hovered = ImGui::IsItemHovered();
+            const float cell_width = 20.0f * preview_size.x / palette.width;
+            const float cell_height = 20.0f * preview_size.y / palette.height;
+            ImDrawList* atlas_draw = ImGui::GetWindowDrawList();
+            for (int i = 0; i <= 12; ++i) {
+                const float gx = image_min.x + i * cell_width;
+                const float gy = image_min.y + i * cell_height;
+                atlas_draw->AddLine(ImVec2(gx, image_min.y), ImVec2(gx, image_min.y + 12 * cell_height),
+                                    IM_COL32(255, 255, 255, 70));
+                atlas_draw->AddLine(ImVec2(image_min.x, gy), ImVec2(image_min.x + 12 * cell_width, gy),
+                                    IM_COL32(255, 255, 255, 70));
             }
+            auto update_brush_selection = [&]() {
+                const ImVec2 mouse = ImGui::GetIO().MousePos;
+                const float px = std::clamp(mouse.x, image_min.x, image_max.x - 0.001f);
+                const float py = std::clamp(mouse.y, image_min.y, image_max.y - 0.001f);
+                const int atlas_x = static_cast<int>((px - image_min.x) * palette.width / preview_size.x);
+                const int atlas_y = static_cast<int>((py - image_min.y) * palette.height / preview_size.y);
+                state.brush_col1 = std::clamp(atlas_x / 20, 0, 11);
+                state.brush_row1 = std::clamp(atlas_y / 20, 0, 11);
+                state.brush_art = std::min(state.brush_row0, state.brush_row1) * 12 +
+                                  std::min(state.brush_col0, state.brush_col1) + 1;
+                state.brush_erase = false;
+            };
+            if (image_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                const ImVec2 mouse = ImGui::GetIO().MousePos;
+                const int atlas_x = static_cast<int>((mouse.x - image_min.x) * palette.width / preview_size.x);
+                const int atlas_y = static_cast<int>((mouse.y - image_min.y) * palette.height / preview_size.y);
+                state.brush_col0 = state.brush_col1 = std::clamp(atlas_x / 20, 0, 11);
+                state.brush_row0 = state.brush_row1 = std::clamp(atlas_y / 20, 0, 11);
+                state.selecting_brush = true;
+                update_brush_selection();
+            }
+            if (state.selecting_brush &&
+                (ImGui::IsMouseDown(ImGuiMouseButton_Left) || ImGui::IsMouseReleased(ImGuiMouseButton_Left)))
+                update_brush_selection();
+            if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) state.selecting_brush = false;
+            const int min_col = std::min(state.brush_col0, state.brush_col1);
+            const int min_row = std::min(state.brush_row0, state.brush_row1);
+            const int max_col = std::max(state.brush_col0, state.brush_col1);
+            const int max_row = std::max(state.brush_row0, state.brush_row1);
+            const ImVec2 selection_min(image_min.x + min_col * cell_width,
+                                       image_min.y + min_row * cell_height);
+            const ImVec2 selection_max(image_min.x + (max_col + 1) * cell_width,
+                                       image_min.y + (max_row + 1) * cell_height);
+            atlas_draw->AddRectFilled(selection_min, selection_max, IM_COL32(70, 170, 255, 50));
+            atlas_draw->AddRect(selection_min, selection_max, IM_COL32(100, 205, 255, 255), 0.0f, 0, 2.0f);
+            ImGui::Text("Tamaño del pincel: %d × %d tiles",
+                        max_col - min_col + 1, max_row - min_row + 1);
         } else {
             ImGui::TextColored(ImVec4(1.0f, 0.38f, 0.32f, 1.0f),
                                "No se cargó el atlas %02d (%s).", state.brush_tileset,
@@ -964,7 +1605,9 @@ void DrawInspector(EditorState& state) {
         int art = state.brush_layer == 0 ? tile.art_back : tile.art_front;
         ImGui::Text("Capa activa: tileset %d, gráfico %d", tileset, art);
         float color[4] = {tile.red / 255.0f, tile.green / 255.0f, tile.blue / 255.0f, tile.alpha / 255.0f};
-        if (ImGui::ColorEdit4("Tinte del tile", color)) {
+        const bool tint_changed = ImGui::ColorEdit4("Tinte del tile", color);
+        if (ImGui::IsItemActivated()) PushUndoSnapshot(state);
+        if (tint_changed) {
             tile.red = static_cast<std::uint8_t>(std::lround(std::clamp(color[0], 0.0f, 1.0f) * 255.0f));
             tile.green = static_cast<std::uint8_t>(std::lround(std::clamp(color[1], 0.0f, 1.0f) * 255.0f));
             tile.blue = static_cast<std::uint8_t>(std::lround(std::clamp(color[2], 0.0f, 1.0f) * 255.0f));
@@ -972,7 +1615,10 @@ void DrawInspector(EditorState& state) {
             state.dirty = true;
         }
         std::uint32_t flags = tile.block_flags;
-        if (ImGui::InputScalar("Propiedades del bloque (hexadecimal)", ImGuiDataType_U32, &flags, nullptr, nullptr, "%08X")) {
+        const bool block_flags_changed = ImGui::InputScalar("Propiedades del bloque (hexadecimal)",
+            ImGuiDataType_U32, &flags, nullptr, nullptr, "%08X");
+        if (ImGui::IsItemActivated()) PushUndoSnapshot(state);
+        if (block_flags_changed) {
             tile.block_flags = flags;
             state.dirty = true;
         }
@@ -996,6 +1642,7 @@ void DrawInspector(EditorState& state) {
                     bool enabled = (tile.block_flags & flag.value) != 0;
                     ImGui::PushID(static_cast<int>(i + col));
                     if (ImGui::Checkbox(flag.label, &enabled)) {
+                        PushUndoSnapshot(state);
                         if (enabled) tile.block_flags |= flag.value;
                         else tile.block_flags &= ~flag.value;
                         state.dirty = true;
@@ -1007,6 +1654,12 @@ void DrawInspector(EditorState& state) {
         }
         ImGui::TextDisabled("Se editan los índices directamente; se conservan los nombres de textura del mapa.");
     }
+
+    ImGui::SeparatorText("Pincel de iluminación");
+    ImGui::ColorEdit4("Color y alpha", state.light_brush_color);
+    ImGui::Combo("Tamaño del pincel de luz", &state.light_brush_radius,
+                 "Pequeño (1 tile)\0Mediano (3 × 3)\0Grande (5 × 5)\0");
+    ImGui::TextDisabled("Actívalo en la barra superior de la vista del mapa.");
 
     ImGui::SeparatorText("Selección rectangular y portapapeles");
     if (ImGui::Checkbox("Herramienta de selección", &state.selection_mode) && state.selection_mode) {
@@ -1027,12 +1680,18 @@ void DrawInspector(EditorState& state) {
     ImGui::EndDisabled();
 
     ImGui::SeparatorText("Objetos");
+    const std::size_t visible_sprite_types = static_cast<std::size_t>(std::count_if(
+        state.object_sprites.begin(), state.object_sprites.end(),
+        [](const ObjectSprite& sprite) { return sprite.texture != 0; }));
+    ImGui::TextDisabled("Sprites del juego disponibles: %zu. Los activadores sin imagen usan marcadores.",
+                        visible_sprite_types);
     if (ImGui::Button("Añadir inicio del jugador")) {
         MapObject object{};
         object.id = 0;
         object.x = state.selected_x * 20;
         object.y = state.selected_y * 20;
         object.change_light = 1;
+        PushUndoSnapshot(state);
         state.map.objects.push_back(object);
         state.selected_object = static_cast<int>(state.map.objects.size()) - 1;
         state.map.header.object_count = static_cast<std::uint32_t>(state.map.objects.size());
@@ -1049,6 +1708,7 @@ void DrawInspector(EditorState& state) {
         object.x = state.selected_x * 20;
         object.y = state.selected_y * 20;
         object.change_light = 1;
+        PushUndoSnapshot(state);
         state.map.objects.push_back(object);
         state.selected_object = static_cast<int>(state.map.objects.size()) - 1;
         state.map.header.object_count = static_cast<std::uint32_t>(state.map.objects.size());
@@ -1057,75 +1717,220 @@ void DrawInspector(EditorState& state) {
     if (state.selected_object >= 0 && state.selected_object < static_cast<int>(state.map.objects.size())) {
         MapObject& selected = state.map.objects[static_cast<std::size_t>(state.selected_object)];
         ImGui::SeparatorText("Propiedades del objeto seleccionado");
-        if (DrawObjectTypeCombo("Tipo de objeto", selected.id, state.object_search)) state.dirty = true;
+        if (DrawObjectTypeCombo("Tipo de objeto", selected.id, state.object_search, &state)) state.dirty = true;
         int id = static_cast<int>(selected.id);
-        if (ImGui::InputInt("ID personalizado del objeto", &id)) {
+        const bool id_changed = ImGui::InputInt("ID personalizado del objeto", &id);
+        if (ImGui::IsItemActivated()) PushUndoSnapshot(state);
+        if (id_changed) {
             selected.id = static_cast<std::uint32_t>(std::max(0, id));
             state.dirty = true;
         }
         int x = selected.x;
-        if (ImGui::InputInt("X del objeto (píxeles)", &x)) { selected.x = x; state.dirty = true; }
+        const bool x_changed = ImGui::InputInt("X del objeto (píxeles)", &x);
+        if (ImGui::IsItemActivated()) PushUndoSnapshot(state);
+        if (x_changed) { selected.x = x; state.dirty = true; }
         int y = selected.y;
-        if (ImGui::InputInt("Y del objeto (píxeles)", &y)) { selected.y = y; state.dirty = true; }
+        const bool y_changed = ImGui::InputInt("Y del objeto (píxeles)", &y);
+        if (ImGui::IsItemActivated()) PushUndoSnapshot(state);
+        if (y_changed) { selected.y = y; state.dirty = true; }
         bool receives_light = selected.change_light != 0;
         if (ImGui::Checkbox("Recibe iluminación", &receives_light)) {
             selected.change_light = receives_light ? 1 : 0;
             state.dirty = true;
         }
         int skill = selected.skill;
-        if (ImGui::InputInt("Habilidad / dificultad", &skill)) {
+        const bool skill_changed = ImGui::InputInt("Dificultad mínima", &skill);
+        if (ImGui::IsItemActivated()) PushUndoSnapshot(state);
+        if (skill_changed) {
             selected.skill = static_cast<std::uint8_t>(std::clamp(skill, 0, 255));
             state.dirty = true;
         }
         ImGui::SeparatorText("Parámetros según el tipo");
-        if (DrawTriggerFields(selected)) state.dirty = true;
+        if (DrawTriggerFields(state, selected)) state.dirty = true;
         if (ImGui::Button("Eliminar objeto seleccionado")) {
+            PushUndoSnapshot(state);
             state.map.objects.erase(state.map.objects.begin() + state.selected_object);
             state.selected_object = -1;
             state.map.header.object_count = static_cast<std::uint32_t>(state.map.objects.size());
             state.dirty = true;
         }
     }
-    if (ImGui::BeginTable("objects", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
-                                             ImGuiTableFlags_ScrollY, ImVec2(0, 180))) {
-        ImGui::TableSetupColumn("#");
-        ImGui::TableSetupColumn("ID");
-        ImGui::TableSetupColumn("X");
-        ImGui::TableSetupColumn("Y");
-        ImGui::TableSetupColumn("Eliminar");
-        ImGui::TableHeadersRow();
-        int remove_index = -1;
-        for (int i = 0; i < static_cast<int>(state.map.objects.size()); ++i) {
-            MapObject& object = state.map.objects[static_cast<std::size_t>(i)];
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            ImGui::PushID(i);
-            if (ImGui::Selectable(std::to_string(i).c_str(), state.selected_object == i))
-                state.selected_object = i;
-            ImGui::TableSetColumnIndex(1);
-            int id = static_cast<int>(object.id);
-            if (ImGui::InputInt("##id", &id, 0, 0)) {
-                object.id = static_cast<std::uint32_t>(std::max(0, id));
-                state.dirty = true;
+    ImGui::End();
+}
+
+void DrawLayoutSplitters(EditorState& state) {
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    const ImVec2 work_pos = viewport->WorkPos;
+    const ImVec2 work_size = viewport->WorkSize;
+    const float content_height = work_size.y - BottomDockHeight(state);
+    constexpr ImGuiWindowFlags splitter_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
+        ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoFocusOnAppearing |
+        ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNav;
+
+    auto draw_splitter = [&](const char* name, ImVec2 position, ImVec2 size, bool vertical, auto&& update) {
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        ImGui::SetNextWindowPos(position, ImGuiCond_Always);
+        ImGui::SetNextWindowSize(size, ImGuiCond_Always);
+        ImGui::Begin(name, nullptr, splitter_flags);
+        ImGui::InvisibleButton("##drag", size);
+        const bool hovered = ImGui::IsItemHovered();
+        const bool active = ImGui::IsItemActive() && ImGui::IsMouseDown(ImGuiMouseButton_Left);
+        ImGui::GetWindowDrawList()->AddRectFilled(position,
+            ImVec2(position.x + size.x, position.y + size.y),
+            active || hovered ? IM_COL32(72, 151, 198, 220) : IM_COL32(57, 64, 76, 170));
+        if (hovered || active)
+            ImGui::SetMouseCursor(vertical ? ImGuiMouseCursor_ResizeEW : ImGuiMouseCursor_ResizeNS);
+        if (active) update(ImGui::GetIO().MousePos);
+        ImGui::End();
+        ImGui::PopStyleVar();
+    };
+
+    const float tree_width = SceneTreeWidth(state);
+    draw_splitter("##SceneSplitter",
+        ImVec2(work_pos.x + tree_width - 3.0f, work_pos.y), ImVec2(6.0f, content_height), true,
+        [&](ImVec2 mouse) {
+            const float maximum = std::max(150.0f, std::min(work_size.x * 0.38f,
+                                                            work_size.x - InspectorWidth(state) - 250.0f));
+            state.scene_width = std::clamp(mouse.x - work_pos.x, 150.0f, maximum);
+        });
+
+    const float inspector_width = InspectorWidth(state);
+    draw_splitter("##InspectorSplitter",
+        ImVec2(work_pos.x + work_size.x - inspector_width - 3.0f, work_pos.y),
+        ImVec2(6.0f, content_height), true,
+        [&](ImVec2 mouse) {
+            const float maximum = std::max(230.0f, std::min(work_size.x * 0.48f,
+                                                            work_size.x - SceneTreeWidth(state) - 250.0f));
+            state.inspector_width = std::clamp(work_pos.x + work_size.x - mouse.x, 230.0f, maximum);
+        });
+
+    const float bottom_height = BottomDockHeight(state);
+    draw_splitter("##BottomSplitter",
+        ImVec2(work_pos.x, work_pos.y + work_size.y - bottom_height - 3.0f),
+        ImVec2(work_size.x, 6.0f), false,
+        [&](ImVec2 mouse) {
+            state.bottom_height = std::clamp(work_pos.y + work_size.y - mouse.y,
+                                              90.0f, std::max(90.0f, work_size.y * 0.45f));
+        });
+}
+
+void DrawBottomDock(EditorState& state) {
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    const float height = BottomDockHeight(state);
+    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x,
+                                   viewport->WorkPos.y + viewport->WorkSize.y - height), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(viewport->WorkSize.x, height), ImGuiCond_Always);
+    constexpr ImGuiWindowFlags panel_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+                                             ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings;
+    ImGui::Begin("Panel inferior", nullptr, panel_flags);
+    if (ImGui::BeginTabBar("BottomDockTabs")) {
+        if (ImGui::BeginTabItem("Sistema de archivos")) {
+            const std::filesystem::path texture_directory = FindTextureDirectory(state.map_path);
+            const std::filesystem::path levels_directory = texture_directory.empty()
+                ? std::filesystem::path{} : texture_directory.parent_path() / "levels";
+            std::string requested_open;
+            ImGui::BeginChild("LevelFiles", ImVec2(viewport->WorkSize.x * 0.48f, 0), true);
+            ImGui::TextDisabled("Niveles");
+            if (!levels_directory.empty() && std::filesystem::is_directory(levels_directory)) {
+                std::vector<std::filesystem::path> maps;
+                std::error_code ec;
+                for (std::filesystem::directory_iterator it(levels_directory, ec), end;
+                     !ec && it != end; it.increment(ec)) {
+                    if (it->is_regular_file(ec) && it->path().extension() == ".map")
+                        maps.push_back(it->path());
+                }
+                std::sort(maps.begin(), maps.end());
+                for (const std::filesystem::path& path : maps) {
+                    if (ImGui::Selectable(path.filename().string().c_str(), false))
+                        requested_open = path.string();
+                }
+            } else {
+                ImGui::TextDisabled("Abre un mapa del juego para localizar su carpeta data/levels.");
             }
-            ImGui::TableSetColumnIndex(2);
-            int x = object.x;
-            if (ImGui::InputInt("##x", &x, 0, 0)) { object.x = x; state.dirty = true; }
-            ImGui::TableSetColumnIndex(3);
-            int y = object.y;
-            if (ImGui::InputInt("##y", &y, 0, 0)) { object.y = y; state.dirty = true; }
-            ImGui::TableSetColumnIndex(4);
-            if (ImGui::SmallButton("Quitar")) remove_index = i;
-            ImGui::PopID();
+            ImGui::EndChild();
+            ImGui::SameLine();
+            ImGui::BeginChild("TextureFiles", ImVec2(0, 0), true);
+            if (ImGui::BeginTabBar("AssetBrowserTabs")) {
+                if (ImGui::BeginTabItem("Texturas")) {
+                    ImGui::TextDisabled("Selecciona un PNG y asígnalo desde Inspector.");
+                    if (!texture_directory.empty() && std::filesystem::is_directory(texture_directory)) {
+                        std::vector<std::filesystem::path> textures;
+                        std::error_code ec;
+                        for (std::filesystem::directory_iterator it(texture_directory, ec), end;
+                             !ec && it != end; it.increment(ec)) {
+                            if (it->is_regular_file(ec) && Lowercase(it->path().extension().string()) == ".png")
+                                textures.push_back(it->path());
+                        }
+                        std::sort(textures.begin(), textures.end());
+                        for (const std::filesystem::path& path : textures) {
+                            const std::string filename = path.filename().string();
+                            if (ImGui::Selectable(filename.c_str(),
+                                !state.selected_asset_is_music && state.selected_asset_filename == filename)) {
+                                state.selected_asset_filename = filename;
+                                state.selected_asset_is_music = false;
+                            }
+                        }
+                    } else {
+                        ImGui::TextDisabled("No se encontró data/textures junto al mapa.");
+                    }
+                    ImGui::EndTabItem();
+                }
+                if (ImGui::BeginTabItem("Música")) {
+                    const std::filesystem::path music_directory = texture_directory.empty()
+                        ? std::filesystem::path{} : texture_directory.parent_path() / "music";
+                    ImGui::TextDisabled("Selecciona un archivo .it y asígnalo desde Inspector.");
+                    if (!music_directory.empty() && std::filesystem::is_directory(music_directory)) {
+                        std::vector<std::filesystem::path> music_files;
+                        std::error_code ec;
+                        for (std::filesystem::directory_iterator it(music_directory, ec), end;
+                             !ec && it != end; it.increment(ec)) {
+                            if (it->is_regular_file(ec) && Lowercase(it->path().extension().string()) == ".it")
+                                music_files.push_back(it->path());
+                        }
+                        std::sort(music_files.begin(), music_files.end());
+                        for (const std::filesystem::path& path : music_files) {
+                            const std::string filename = path.filename().string();
+                            if (ImGui::Selectable(filename.c_str(),
+                                state.selected_asset_is_music && state.selected_asset_filename == filename)) {
+                                state.selected_asset_filename = filename;
+                                state.selected_asset_is_music = true;
+                            }
+                        }
+                    } else {
+                        ImGui::TextDisabled("No se encontró data/music junto al mapa.");
+                    }
+                    ImGui::EndTabItem();
+                }
+                ImGui::EndTabBar();
+            }
+            ImGui::EndChild();
+            if (!requested_open.empty()) {
+                if (state.dirty) {
+                    std::snprintf(state.message, sizeof(state.message),
+                                  "Guarda el mapa actual antes de abrir otro.");
+                } else {
+                    CopyFromField(state.map_path, sizeof(state.map_path), requested_open.c_str());
+                    LoadMap(state);
+                }
+            }
+            ImGui::EndTabItem();
         }
-        ImGui::EndTable();
-        if (remove_index >= 0) {
-            state.map.objects.erase(state.map.objects.begin() + remove_index);
-            if (state.selected_object == remove_index) state.selected_object = -1;
-            else if (state.selected_object > remove_index) --state.selected_object;
-            state.map.header.object_count = static_cast<std::uint32_t>(state.map.objects.size());
-            state.dirty = true;
+        if (ImGui::BeginTabItem("Salida")) {
+            ImGui::TextWrapped("%s", state.message);
+            ImGui::Text("Estado: %s", state.dirty ? "cambios sin guardar" : "guardado");
+            if (state.loaded)
+                ImGui::Text("Mapa: %u × %u tiles · %zu entidades · %u tilesets",
+                            state.map.width(), state.map.height(), state.map.objects.size(),
+                            state.map.header.tileset_count);
+            ImGui::EndTabItem();
         }
+        if (ImGui::BeginTabItem("Ayuda")) {
+            ImGui::TextUnformatted("⌘S: guardar · ⌘Z: deshacer · ⌘⇧Z / Ctrl+Y: rehacer.");
+            ImGui::TextUnformatted("Selecciona una entidad en Escena para editarla en Inspector; arrastra en el atlas para el pincel multi-tile.");
+            ImGui::EndTabItem();
+        }
+        ImGui::EndTabBar();
     }
     ImGui::End();
 }
@@ -1153,6 +1958,7 @@ int main(int, char**) {
         SDL_Quit();
         return 1;
     }
+    SDL_SetWindowMinimumSize(window, 1050, 680);
     SDL_GLContext gl_context = SDL_GL_CreateContext(window);
     if (!gl_context) {
         std::fprintf(stderr, "SDL_GL_CreateContext: %s\n", SDL_GetError());
@@ -1165,7 +1971,7 @@ int main(int, char**) {
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGui::StyleColorsDark();
+    ApplyGodotInspiredStyle();
     ImGui_ImplSDL2_InitForOpenGL(window, gl_context);
     ImGui_ImplOpenGL3_Init("#version 150");
 
@@ -1179,10 +1985,18 @@ int main(int, char**) {
                 running = false;
             if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE)
                 running = false;
-            if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_s &&
+            if (event.type == SDL_KEYDOWN &&
                 (event.key.keysym.mod & (KMOD_GUI | KMOD_CTRL)) != 0 &&
-                state.loaded && state.map_path[0] != '\0')
-                SaveMap(state);
+                !ImGui::GetIO().WantTextInput) {
+                if (event.key.keysym.sym == SDLK_s && state.loaded && state.map_path[0] != '\0')
+                    SaveMap(state);
+                else if (event.key.keysym.sym == SDLK_z) {
+                    if ((event.key.keysym.mod & KMOD_SHIFT) != 0) Redo(state);
+                    else Undo(state);
+                } else if (event.key.keysym.sym == SDLK_y) {
+                    Redo(state);
+                }
+            }
         }
 
         ImGui_ImplOpenGL3_NewFrame();
@@ -1206,6 +2020,11 @@ int main(int, char**) {
                 if (ImGui::MenuItem("Salir")) running = false;
                 ImGui::EndMenu();
             }
+            if (ImGui::BeginMenu("Editar")) {
+                if (ImGui::MenuItem("Deshacer", "⌘Z", false, !state.undo_history.empty())) Undo(state);
+                if (ImGui::MenuItem("Rehacer", "⌘⇧Z / Ctrl+Y", false, !state.redo_history.empty())) Redo(state);
+                ImGui::EndMenu();
+            }
             ImGui::TextUnformatted(state.dirty ? "  Cambios sin guardar" : "  Editor de mapas de Hurrican");
             ImGui::EndMainMenuBar();
         }
@@ -1227,8 +2046,11 @@ int main(int, char**) {
             if (ImGui::Button("Cancelar")) ImGui::CloseCurrentPopup();
             ImGui::EndPopup();
         }
-        DrawInspector(state);
+        DrawSceneTree(state);
         DrawMapCanvas(state);
+        DrawInspector(state);
+        DrawBottomDock(state);
+        DrawLayoutSplitters(state);
 
         ImGui::Render();
         int display_w = 0, display_h = 0;
@@ -1241,6 +2063,7 @@ int main(int, char**) {
     }
 
     ReleaseAtlases(state);
+    ReleaseObjectSprites(state);
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplSDL2_Shutdown();
     ImGui::DestroyContext();
