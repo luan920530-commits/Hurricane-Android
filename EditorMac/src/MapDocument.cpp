@@ -1,5 +1,7 @@
 #include "MapDocument.hpp"
 
+#include <algorithm>
+#include <cstring>
 #include <fstream>
 #include <limits>
 #include <stdexcept>
@@ -107,6 +109,36 @@ bool MapDocument::Load(const std::filesystem::path& path, MapDocument& out, std:
     }
 
     out = std::move(parsed);
+    error.clear();
+    return true;
+}
+
+bool MapDocument::CreateEmpty(std::uint32_t width, std::uint32_t height, MapDocument& out, std::string& error) {
+    if (width == 0 || width > kMaxWidth || height == 0 || height > kMaxHeight) {
+        error = "New map dimensions are outside the game limits.";
+        return false;
+    }
+    MapDocument map;
+    constexpr char signature[] = "Hurrican Level File V1.0 (c) 2002 Poke53280 - ";
+    static_assert(sizeof(signature) - 1 == sizeof(map.header.signature), "Map signature size changed");
+    std::memcpy(map.header.signature, signature, sizeof(map.header.signature));
+    std::memcpy(map.header.description, "New Hurrican level", sizeof("New Hurrican level"));
+    map.header.time_limit = 500;
+    map.header.width = width;
+    map.header.height = height;
+    map.header.object_count = 1;
+    map.header.scroll_background = 1;
+    map.tiles.resize(static_cast<std::size_t>(width) * height);
+    for (MapTile& tile : map.tiles) {
+        tile.red = tile.green = tile.blue = tile.alpha = 255;
+    }
+    MapObject start{};
+    start.id = 0;
+    start.x = static_cast<std::int32_t>(std::min<std::uint32_t>(2, width - 1) * 20);
+    start.y = static_cast<std::int32_t>(std::min<std::uint32_t>(2, height - 1) * 20);
+    start.change_light = 1;
+    map.objects.push_back(start);
+    out = std::move(map);
     error.clear();
     return true;
 }

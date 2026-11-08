@@ -85,6 +85,7 @@ public:
     const MapTile& tile(std::uint32_t x, std::uint32_t y) const;
 
     static bool Load(const std::filesystem::path& path, MapDocument& out, std::string& error);
+    static bool CreateEmpty(std::uint32_t width, std::uint32_t height, MapDocument& out, std::string& error);
     bool Save(const std::filesystem::path& path, std::string& error) const;
     std::uint64_t ExpectedFileSize() const noexcept;
 };

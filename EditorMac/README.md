@@ -8,10 +8,11 @@ The new target uses SDL2, OpenGL, and Dear ImGui. It targets Intel Macs running 
 
 - Portable reader/writer for the original `.map` header, tiles, objects, and appendix.
 - Byte-for-byte round-trip test for all maps currently bundled under `Hurrican/data/levels`.
-- SDL2/ImGui application shell with native macOS Open/Save panels, atlas-textured tile preview when the matching game data folder is present, tile-layer/art/block-flag editing, basic level metadata, and numeric object editing.
+- Native SDL2/ImGui editor with new-map creation, map open/save, atlas tile painting, rectangular copy/paste/fill, level metadata, and object creation, selection, movement and editing.
+- Searchable catalog for 149 game object IDs and tailored inspectors for several built-in triggers (particle emitters, exits, sound/music triggers, switches, elevators, tube props, etc.).
 - The map format is kept compatible; the application does not rewrite source maps unless the user explicitly saves.
 
-The editor is **not yet at full feature parity** with the Windows tool. It renders the map's tile atlases when it finds the matching game `data/textures` folder, and falls back to schematic colors if those images are unavailable. Object catalog/sprites, lighting and shadows, triggers, background/parallax and music selectors, undo/clipboard/minimap, and in-editor game testing remain to be ported.
+The editor is **not yet at full feature parity** with the Windows tool. It renders map tile atlases when it finds the matching game `data/textures` folder, and falls back to schematic colors if those images are unavailable. Sprite previews, specialized inspectors for every trigger, visual background/music asset pickers, dedicated lighting/shadow painting, undo/redo, minimap, and in-editor game testing remain to be ported.
 
 ## Build on an Intel Mac
 

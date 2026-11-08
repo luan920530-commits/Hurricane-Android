@@ -22,6 +22,7 @@ int main(int argc, char** argv) {
 
     const fs::path levels = argv[1];
     const fs::path scratch = fs::temp_directory_path() / "hurrican-map-roundtrip-test.map";
+    const fs::path scratch_again = fs::temp_directory_path() / "hurrican-map-roundtrip-again-test.map";
     std::size_t checked = 0;
 
     for (const auto& entry : fs::recursive_directory_iterator(levels)) {
@@ -45,8 +46,27 @@ int main(int argc, char** argv) {
         ++checked;
     }
 
+    MapDocument created;
+    std::string error;
+    if (!MapDocument::CreateEmpty(17, 11, created, error) || !created.Save(scratch, error)) {
+        std::cerr << "FAIL create blank level: " << error << '\n';
+        return 1;
+    }
+    MapDocument reopened;
+    if (!MapDocument::Load(scratch, reopened, error) || reopened.width() != 17 ||
+        reopened.height() != 11 || reopened.objects.size() != 1 || reopened.objects[0].id != 0 ||
+        !reopened.Save(scratch_again, error) || ReadBytes(scratch) != ReadBytes(scratch_again)) {
+        std::cerr << "FAIL reload/round-trip blank level: " << error << '\n';
+        return 1;
+    }
+    if (MapDocument::CreateEmpty(MapDocument::kMaxWidth + 1, 10, created, error)) {
+        std::cerr << "FAIL invalid dimensions were accepted.\n";
+        return 1;
+    }
     std::error_code ignored;
     fs::remove(scratch, ignored);
-    std::cout << "PASS: loaded and byte-for-byte round-tripped " << checked << " .map files.\n";
+    fs::remove(scratch_again, ignored);
+    std::cout << "PASS: byte-for-byte round-tripped " << checked
+              << " bundled maps and created/reloaded a blank map.\n";
     return checked == 0 ? 1 : 0;
 }
