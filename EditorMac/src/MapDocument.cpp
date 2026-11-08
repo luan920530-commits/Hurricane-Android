@@ -47,14 +47,14 @@ std::uint64_t MapDocument::ExpectedFileSize() const noexcept {
 bool MapDocument::Load(const std::filesystem::path& path, MapDocument& out, std::string& error) {
     std::ifstream input(path, std::ios::binary);
     if (!input) {
-        error = "Cannot open map: " + path.string();
+        error = "No se puede abrir el mapa: " + path.string();
         return false;
     }
 
     input.seekg(0, std::ios::end);
     const auto end = input.tellg();
     if (end < 0 || static_cast<std::uint64_t>(end) < sizeof(MapHeader)) {
-        error = "File is too small to contain a Hurrican map header.";
+        error = "El archivo es demasiado pequeño para contener la cabecera del mapa.";
         return false;
     }
     const auto file_size = static_cast<std::uint64_t>(end);
@@ -62,49 +62,49 @@ bool MapDocument::Load(const std::filesystem::path& path, MapDocument& out, std:
 
     MapDocument parsed;
     if (!ReadExact(input, &parsed.header, sizeof(parsed.header))) {
-        error = "Could not read the complete Hurrican map header.";
+        error = "No se pudo leer completa la cabecera del mapa de Hurrican.";
         return false;
     }
 
     if (parsed.header.width == 0 || parsed.header.width > kMaxWidth ||
         parsed.header.height == 0 || parsed.header.height > kMaxHeight) {
-        error = "Map dimensions are invalid or exceed the game limits.";
+        error = "Las dimensiones del mapa no son válidas o superan los límites del juego.";
         return false;
     }
     if (parsed.header.tileset_count > 64 || parsed.header.object_count > kMaxObjects) {
-        error = "Map header contains an unsupported tileset or object count.";
+        error = "La cabecera contiene una cantidad de tilesets u objetos no compatible.";
         return false;
     }
 
     const std::uint64_t expected = parsed.ExpectedFileSize();
     if (expected != file_size) {
-        error = "Map size does not match its header (expected " + std::to_string(expected) +
-                " bytes, found " + std::to_string(file_size) + ").";
+        error = "El tamaño del mapa no coincide con la cabecera (se esperaban " + std::to_string(expected) +
+                " bytes y se encontraron " + std::to_string(file_size) + ").";
         return false;
     }
 
     const std::uint64_t tile_count = static_cast<std::uint64_t>(parsed.width()) * parsed.height();
     if (tile_count > std::numeric_limits<std::size_t>::max() / sizeof(MapTile)) {
-        error = "Map is too large for this computer.";
+        error = "El mapa es demasiado grande para este equipo.";
         return false;
     }
 
     parsed.tiles.resize(static_cast<std::size_t>(tile_count));
     if (!parsed.tiles.empty() &&
         !ReadExact(input, parsed.tiles.data(), parsed.tiles.size() * sizeof(MapTile))) {
-        error = "Map tile data is truncated.";
+        error = "Los datos de tiles del mapa están incompletos.";
         return false;
     }
 
     parsed.objects.resize(parsed.header.object_count);
     if (!parsed.objects.empty() &&
         !ReadExact(input, parsed.objects.data(), parsed.objects.size() * sizeof(MapObject))) {
-        error = "Map object data is truncated.";
+        error = "Los datos de objetos del mapa están incompletos.";
         return false;
     }
 
     if (!ReadExact(input, &parsed.appendix, sizeof(parsed.appendix))) {
-        error = "Map metadata appendix is missing or truncated.";
+        error = "Falta el bloque final de metadatos del mapa o está incompleto.";
         return false;
     }
 
@@ -115,14 +115,14 @@ bool MapDocument::Load(const std::filesystem::path& path, MapDocument& out, std:
 
 bool MapDocument::CreateEmpty(std::uint32_t width, std::uint32_t height, MapDocument& out, std::string& error) {
     if (width == 0 || width > kMaxWidth || height == 0 || height > kMaxHeight) {
-        error = "New map dimensions are outside the game limits.";
+        error = "Las dimensiones del mapa nuevo superan los límites del juego.";
         return false;
     }
     MapDocument map;
     constexpr char signature[] = "Hurrican Level File V1.0 (c) 2002 Poke53280 - ";
     static_assert(sizeof(signature) - 1 == sizeof(map.header.signature), "Map signature size changed");
     std::memcpy(map.header.signature, signature, sizeof(map.header.signature));
-    std::memcpy(map.header.description, "New Hurrican level", sizeof("New Hurrican level"));
+    std::memcpy(map.header.description, "Nuevo nivel de Hurrican", sizeof("Nuevo nivel de Hurrican"));
     map.header.time_limit = 500;
     map.header.width = width;
     map.header.height = height;
@@ -147,13 +147,13 @@ bool MapDocument::Save(const std::filesystem::path& path, std::string& error) co
     if (width() == 0 || width() > kMaxWidth || height() == 0 || height() > kMaxHeight ||
         header.tileset_count > 64 || header.object_count != objects.size() ||
         tiles.size() != static_cast<std::size_t>(width()) * height()) {
-        error = "Map document is inconsistent or exceeds the game limits.";
+        error = "El documento del mapa es inconsistente o supera los límites del juego.";
         return false;
     }
 
     std::ofstream output(path, std::ios::binary | std::ios::trunc);
     if (!output) {
-        error = "Cannot create map: " + path.string();
+        error = "No se puede crear el mapa: " + path.string();
         return false;
     }
 
@@ -161,7 +161,7 @@ bool MapDocument::Save(const std::filesystem::path& path, std::string& error) co
         !WriteExact(output, tiles.data(), tiles.size() * sizeof(MapTile)) ||
         !WriteExact(output, objects.data(), objects.size() * sizeof(MapObject)) ||
         !WriteExact(output, &appendix, sizeof(appendix))) {
-        error = "A write error occurred while saving the map.";
+        error = "Ocurrió un error de escritura al guardar el mapa.";
         return false;
     }
 

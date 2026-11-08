@@ -1,26 +1,27 @@
-# Hurrican Map Editor for macOS (Intel) — port in progress
+# Editor de mapas de Hurrican para macOS (Intel) — port en desarrollo
 
-This is the beginning of a native macOS port of the original `Editor/` program. The original editor is a Windows-only Visual Studio 6 / Win32 x86 application built on Direct3D 8, DirectInput 8, and DirectSound. It is a level editor: it loads and saves the same binary `.map` format used by the game.
+Este es el inicio de un port nativo para macOS del programa original `Editor/`. El editor original solo funciona en Windows: es una aplicación Win32 x86 para Visual Studio 6 basada en Direct3D 8, DirectInput 8 y DirectSound. Permite editar niveles y lee y guarda el mismo formato binario `.map` que usa el juego.
 
-The new target uses SDL2, OpenGL, and Dear ImGui. It targets Intel Macs running macOS 12 Monterey or later (`x86_64`, deployment target 12.0). It does not require Wine or a Windows virtual machine.
+La nueva versión usa SDL2, OpenGL y Dear ImGui. Está dirigida a Mac Intel con macOS 12 Monterey o posterior (`x86_64`, destino mínimo 12.0); no requiere Wine ni una máquina virtual de Windows.
 
-## Current milestone
+## Hito actual
 
-- Portable reader/writer for the original `.map` header, tiles, objects, and appendix.
-- Byte-for-byte round-trip test for all maps currently bundled under `Hurrican/data/levels`.
-- Native SDL2/ImGui editor with new-map creation, map open/save, atlas tile painting, rectangular copy/paste/fill, level metadata, and object creation, selection, movement and editing.
-- Searchable catalog for 149 game object IDs and tailored inspectors for several built-in triggers (particle emitters, exits, sound/music triggers, switches, elevators, tube props, etc.).
-- The map format is kept compatible; the application does not rewrite source maps unless the user explicitly saves.
+- Lector y escritor portables para la cabecera `.map` original, los tiles, los objetos y los datos adicionales.
+- Prueba de ida y vuelta byte a byte para los mapas incluidos en `Hurrican/data/levels`.
+- Editor nativo en español, con panel de propiedades fijo a la izquierda y lienzo de mapa a la derecha; incluye creación, apertura y guardado de mapas, pintura con atlas, selección rectangular, copiar/pegar/rellenar, metadatos y edición de objetos.
+- Los índices se interpretan como en el juego: tilesets desde 0 y gráficos desde 1; el panel muestra el archivo, la ruta encontrada y los errores de cada atlas.
+- Catálogo con búsqueda para 149 IDs de objetos y paneles específicos para varios activadores integrados.
+- El formato del juego se conserva; la aplicación no modifica los mapas fuente hasta que el usuario los guarda explícitamente.
 
-The editor is **not yet at full feature parity** with the Windows tool. It renders map tile atlases when it finds the matching game `data/textures` folder, and falls back to schematic colors if those images are unavailable. Sprite previews, specialized inspectors for every trigger, visual background/music asset pickers, dedicated lighting/shadow painting, undo/redo, minimap, and in-editor game testing remain to be ported.
+El editor **todavía no tiene todas las funciones** de la herramienta de Windows. Muestra los atlas del juego cuando encuentra la carpeta `data/textures` correspondiente; si falta alguna imagen, indica cuál no pudo cargar. Aún faltan las vistas previas de sprites, paneles especializados para todos los activadores, selectores visuales para fondos y música, pintura específica de iluminación y sombras, deshacer/rehacer, minimapa y pruebas del juego desde el editor.
 
-## Download the first installable build
+## Descargar la primera versión instalable
 
-The **macOS Intel editor** GitHub Action builds an `x86_64` app with a macOS 12 deployment target, builds SDL for that same target, runs the map-format tests natively, bundles SDL runtime libraries, and uploads a ZIP, DMG, and SHA-256 checksums. Run it with **Actions → macOS Intel editor → Run workflow**, or let a push/PR change under `EditorMac/` trigger it. Download the `HurricanMapEditor-macOS12-Intel` artifact from the completed run. Installation notes and the unsigned/not-notarized warning are in `INSTALLING.md`.
+La GitHub Action **macOS Intel editor** genera una app `x86_64` con destino mínimo macOS 12, compila SDL para ese mismo destino, ejecuta las pruebas del formato de mapas, incluye las bibliotecas SDL y publica ZIP, DMG y sumas SHA-256. Se puede iniciar desde **Actions → macOS Intel editor → Run workflow** o se ejecuta al actualizar el port. Descarga el artefacto `HurricanMapEditor-macOS12-Intel` cuando termine la ejecución. Las instrucciones de instalación y la advertencia sobre firma/notarización están en `INSTALLING.md`.
 
-## Build on an Intel Mac
+## Compilar en un Mac Intel
 
-Install CMake and SDL2. Dear ImGui 1.91.9 is vendored with its upstream license in `third_party/imgui`:
+Instala CMake y SDL2. Dear ImGui 1.91.9 está incluido en `third_party/imgui` junto con su licencia:
 
 ```sh
 brew install cmake sdl2 sdl2_image
@@ -30,11 +31,11 @@ ctest --test-dir build/EditorMac --output-on-failure
 open build/EditorMac/HurricanMapEditor.app
 ```
 
-In the app, use **Open…** to choose a `.map` with the native macOS file panel (or paste a path into **Map path**). **Save** overwrites the current file; **Save As…** opens the native save panel. Back up original maps before editing.
+En la app, usa **Abrir…** para elegir un archivo `.map` con el selector de macOS o pega una ruta en el campo del mapa. **Guardar** reemplaza el archivo actual; **Guardar como…** abre el selector de guardado. Haz una copia de seguridad de los mapas originales antes de editarlos.
 
-## Format validation without SDL2
+## Validar el formato sin SDL2
 
-The format core and round-trip test have no SDL dependency and can be compiled with a C++17 compiler:
+El núcleo del formato y la prueba de ida y vuelta no dependen de SDL y pueden compilarse con un compilador C++17:
 
 ```sh
 g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic \

@@ -16,7 +16,7 @@ bool ChooseMapToOpen(char* destination, std::size_t capacity) {
         panel.canChooseDirectories = NO;
         panel.allowsMultipleSelection = NO;
         panel.allowedFileTypes = @[ @"map" ];
-        panel.title = @"Open Hurrican map";
+        panel.title = @"Abrir mapa de Hurrican";
 
         if ([panel runModal] != NSModalResponseOK || panel.URL == nil)
             return false;
@@ -37,8 +37,8 @@ bool ChooseMapToSave(char* destination, std::size_t capacity) {
     @autoreleasepool {
         NSSavePanel* panel = [NSSavePanel savePanel];
         panel.allowedFileTypes = @[ @"map" ];
-        panel.nameFieldStringValue = @"NewLevel.map";
-        panel.title = @"Save Hurrican map";
+        panel.nameFieldStringValue = @"NivelNuevo.map";
+        panel.title = @"Guardar mapa de Hurrican";
 
         if ([panel runModal] != NSModalResponseOK || panel.URL == nil)
             return false;

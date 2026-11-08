@@ -24,6 +24,8 @@ int main(int argc, char** argv) {
     const fs::path scratch = fs::temp_directory_path() / "hurrican-map-roundtrip-test.map";
     const fs::path scratch_again = fs::temp_directory_path() / "hurrican-map-roundtrip-again-test.map";
     std::size_t checked = 0;
+    bool saw_zero_based_tileset = false;
+    bool saw_one_based_art = false;
 
     for (const auto& entry : fs::recursive_directory_iterator(levels)) {
         if (!entry.is_regular_file() || entry.path().extension() != ".map")
@@ -35,6 +37,22 @@ int main(int argc, char** argv) {
             std::cerr << "FAIL load " << entry.path() << ": " << error << '\n';
             return 1;
         }
+        for (const auto& tile : map.tiles) {
+            const std::uint8_t tilesets[] = {tile.tileset_back, tile.tileset_front};
+            const std::uint8_t arts[] = {tile.art_back, tile.art_front};
+            for (std::size_t layer = 0; layer < 2; ++layer) {
+                if (arts[layer] == 0)
+                    continue;
+                if (tilesets[layer] >= map.header.tileset_count || arts[layer] > 144) {
+                    std::cerr << "FAIL invalid tileset/art index in " << entry.path()
+                              << " (tileset " << static_cast<unsigned int>(tilesets[layer])
+                              << ", art " << static_cast<unsigned int>(arts[layer]) << ")\n";
+                    return 1;
+                }
+                saw_zero_based_tileset |= tilesets[layer] == 0;
+                saw_one_based_art |= arts[layer] == 144;
+            }
+        }
         if (!map.Save(scratch, error)) {
             std::cerr << "FAIL save " << entry.path() << ": " << error << '\n';
             return 1;
@@ -44,6 +62,10 @@ int main(int argc, char** argv) {
             return 1;
         }
         ++checked;
+    }
+    if (!saw_zero_based_tileset || !saw_one_based_art) {
+        std::cerr << "FAIL bundled maps do not exercise the expected tileset/art index ranges.\n";
+        return 1;
     }
 
     MapDocument created;
@@ -67,6 +89,6 @@ int main(int argc, char** argv) {
     fs::remove(scratch, ignored);
     fs::remove(scratch_again, ignored);
     std::cout << "PASS: byte-for-byte round-tripped " << checked
-              << " bundled maps and created/reloaded a blank map.\n";
+              << " bundled maps, verified tileset/art index ranges, and created/reloaded a blank map.\n";
     return checked == 0 ? 1 : 0;
 }

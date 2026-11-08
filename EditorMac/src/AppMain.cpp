@@ -33,6 +33,9 @@ struct AtlasTexture {
     GLuint texture = 0;
     int width = 0;
     int height = 0;
+    std::string filename;
+    std::string source_path;
+    std::string error;
 };
 
 struct EditorState {
@@ -61,11 +64,11 @@ struct EditorState {
     int selected_x = 0;
     int selected_y = 0;
     int brush_layer = 0; // 0 = back layer, 1 = front layer
-    int brush_tileset = 0;
-    int brush_art = 0;
+    int brush_tileset = 0; // The .map format stores tileset indices from zero.
+    int brush_art = 1; // Art zero is empty; displayed art indices are one-based.
     float zoom = 0.5f;
     char map_path[1024] = "";
-    char message[512] = "Type a .map path, then choose Open.";
+    char message[512] = "Escribe la ruta de un archivo .map y pulsa Abrir.";
 };
 
 void CopyToField(char* destination, std::size_t capacity, const char* source, std::size_t source_size) {
@@ -100,12 +103,12 @@ const ObjectDefinition* FindObjectDefinition(std::uint32_t id) {
 
 const char* ObjectCategoryLabel(ObjectCategory category) {
     switch (category) {
-        case ObjectCategory::ItemOrEnemy: return "Items and enemies";
-        case ObjectCategory::Boss: return "Bosses";
-        case ObjectCategory::LevelObject: return "Level objects and triggers";
-        case ObjectCategory::RuntimeOnly: return "Runtime-only objects";
+        case ObjectCategory::ItemOrEnemy: return "Objetos y enemigos";
+        case ObjectCategory::Boss: return "Jefes";
+        case ObjectCategory::LevelObject: return "Objetos de nivel y activadores";
+        case ObjectCategory::RuntimeOnly: return "Solo durante la partida";
     }
-    return "Other";
+    return "Otros";
 }
 
 bool ObjectMatchesFilter(const ObjectDefinition& definition, const char* filter) {
@@ -125,7 +128,7 @@ bool DrawValueChoice(const char* label, int& value, const char* const* choices, 
     if (value >= 0 && static_cast<std::size_t>(value) < count)
         std::snprintf(preview, sizeof(preview), "%d — %s", value, choices[value]);
     else
-        std::snprintf(preview, sizeof(preview), "%d — custom value", value);
+        std::snprintf(preview, sizeof(preview), "%d — valor personalizado", value);
     bool changed = false;
     if (ImGui::BeginCombo(label, preview)) {
         for (std::size_t i = 0; i < count; ++i) {
@@ -146,101 +149,101 @@ bool DrawTriggerFields(MapObject& object) {
     int value1 = object.value1;
     int value2 = object.value2;
     static const char* const particles[] = {
-        "Rain", "Snow", "Smoke", "Sparks", "Bubbles", "Rising smoke",
-        "Intermittent smoke", "Waterfall splash", "Ceiling drops", "Lightning and thunder",
-        "Scroll speed", "Fog", "Quiet sparks", "Dark lightning", "Spider debris",
-        "Leaves", "Dust", "Maggots", "Lava sparks", "Updraft"
+        "Lluvia", "Nieve", "Humo", "Chispas", "Burbujas", "Humo ascendente",
+        "Humo intermitente", "Salpicadura de cascada", "Gotas del techo", "Relámpagos y truenos",
+        "Velocidad de desplazamiento", "Niebla", "Chispas silenciosas", "Relámpago oscuro", "Restos de araña",
+        "Hojas", "Polvo", "Larvas", "Chispas de lava", "Corriente ascendente"
     };
     static const char* const flame_directions[] = {
-        "Flame direction 1", "Flame direction 2", "Flame direction 3", "Flame direction 4"
+        "Dirección de llama 1", "Dirección de llama 2", "Dirección de llama 3", "Dirección de llama 4"
     };
     static const char* const fade_actions[] = {
-        "Fade stage music out", "Fade stage music in", "Fade sound effect out", "Fade sound effect in"
+        "Desvanecer música del nivel", "Reanudar música del nivel", "Desvanecer efecto de sonido", "Reanudar efecto de sonido"
     };
     static const char* const sound_modes[] = {
-        "Loop with distance volume", "Play once near player", "Loop near player"
+        "Repetir con volumen según distancia", "Reproducir una vez cerca del jugador", "Repetir cerca del jugador"
     };
     static const char* const flare_colors[] = {
-        "White", "Red", "Green", "Blue", "Yellow", "Magenta", "Cyan"
+        "Blanco", "Rojo", "Verde", "Azul", "Amarillo", "Magenta", "Cian"
     };
-    static const char* const spawn_directions[] = {"Left", "Right"};
-    static const char* const eye_modes[] = {"Track the player", "Look around slowly"};
+    static const char* const spawn_directions[] = {"Izquierda", "Derecha"};
+    static const char* const eye_modes[] = {"Seguir al jugador", "Mirar alrededor lentamente"};
     static const char* const tube_forms[] = {
-        "Intact", "Broken", "Broken lower half", "Broken upper half", "Intact with mutant", "Mutant jumps out"
+        "Intacto", "Roto", "Mitad inferior rota", "Mitad superior rota", "Intacto con mutante", "El mutante salta afuera"
     };
     switch (object.id) {
         case 140: // Particle spawner
-            changed |= DrawValueChoice("Particle type", value1, particles, std::size(particles));
-            if (ImGui::InputInt("Spawn interval", &value2)) changed = true;
+            changed |= DrawValueChoice("Tipo de partícula", value1, particles, std::size(particles));
+            if (ImGui::InputInt("Intervalo de aparición", &value2)) changed = true;
             break;
         case 141: { // Elevator
             bool elevator_mode = value1 == 0;
-            if (ImGui::Checkbox("Elevator level mode", &elevator_mode)) {
+            if (ImGui::Checkbox("Modo de nivel del ascensor", &elevator_mode)) {
                 value1 = elevator_mode ? 0 : 1;
                 changed = true;
             }
-            ImGui::TextDisabled("Value 2 sets the lower stop position in elevator mode.");
-            if (ImGui::InputInt("Lower stop Y (pixels)", &value2)) changed = true;
+            ImGui::TextDisabled("El valor 2 define la parada inferior en modo ascensor.");
+            if (ImGui::InputInt("Coordenada Y de parada inferior (píxeles)", &value2)) changed = true;
             break;
         }
         case 143: // Flame trap
-            changed |= DrawValueChoice("Flame direction", value1, flame_directions, std::size(flame_directions));
-            if (ImGui::InputInt("Pause length", &value2)) changed = true;
+            changed |= DrawValueChoice("Dirección de la llama", value1, flame_directions, std::size(flame_directions));
+            if (ImGui::InputInt("Duración de la pausa", &value2)) changed = true;
             break;
         case 144: // Fade music / sound trigger
-            changed |= DrawValueChoice("Fade action", value1, fade_actions, std::size(fade_actions));
-            if (ImGui::InputInt("Sound ID offset (for sound fades)", &value2)) changed = true;
+            changed |= DrawValueChoice("Acción de fundido", value1, fade_actions, std::size(fade_actions));
+            if (ImGui::InputInt("Desfase del ID de sonido (fundidos)", &value2)) changed = true;
             break;
         case 145: // End level
-            if (ImGui::InputInt("Destination stage ID", &value1)) changed = true;
-            if (ImGui::InputInt("Player exit action ID", &value2)) changed = true;
+            if (ImGui::InputInt("ID del nivel de destino", &value1)) changed = true;
+            if (ImGui::InputInt("ID de acción al salir el jugador", &value2)) changed = true;
             break;
         case 146: // Moving platform
-            if (ImGui::InputInt("Horizontal speed", &value1)) changed = true;
-            if (ImGui::InputInt("Vertical speed", &value2)) changed = true;
+            if (ImGui::InputInt("Velocidad horizontal", &value1)) changed = true;
+            if (ImGui::InputInt("Velocidad vertical", &value2)) changed = true;
             break;
         case 156: // Glubschi
         case 157: // Ceiling Glubschi
-            changed |= DrawValueChoice("Gaze behavior", value1, eye_modes, std::size(eye_modes));
-            if (ImGui::InputInt("Secondary parameter", &value2)) changed = true;
+            changed |= DrawValueChoice("Comportamiento de la mirada", value1, eye_modes, std::size(eye_modes));
+            if (ImGui::InputInt("Parámetro secundario", &value2)) changed = true;
             break;
         case 159: // Timed lift
-            if (ImGui::InputInt("Countdown speed", &value1)) changed = true;
-            if (ImGui::InputInt("Starting Y position", &value2)) changed = true;
+            if (ImGui::InputInt("Velocidad de cuenta regresiva", &value1)) changed = true;
+            if (ImGui::InputInt("Posición Y inicial", &value2)) changed = true;
             break;
         case 163: // Switch
-            if (ImGui::InputInt("Switch state value", &value1)) changed = true;
-            if (ImGui::InputInt("Activation group ID", &value2)) changed = true;
-            ImGui::TextDisabled("Objects sharing this group ID are activated together.");
+            if (ImGui::InputInt("Valor del estado del interruptor", &value1)) changed = true;
+            if (ImGui::InputInt("ID del grupo de activación", &value2)) changed = true;
+            ImGui::TextDisabled("Los objetos con el mismo ID de grupo se activan juntos.");
             break;
         case 165: // Sound trigger
-            if (ImGui::InputInt("Sound file ID", &value1)) changed = true;
-            changed |= DrawValueChoice("Playback mode", value2, sound_modes, std::size(sound_modes));
+            if (ImGui::InputInt("ID del archivo de sonido", &value1)) changed = true;
+            changed |= DrawValueChoice("Modo de reproducción", value2, sound_modes, std::size(sound_modes));
             break;
         case 169: // Tutorial text
-            if (ImGui::InputInt("Tutorial text ID", &value1)) changed = true;
-            if (ImGui::InputInt("Tutorial parameter", &value2)) changed = true;
+            if (ImGui::InputInt("ID del texto del tutorial", &value1)) changed = true;
+            if (ImGui::InputInt("Parámetro del tutorial", &value2)) changed = true;
             break;
         case 170: // Light flare
-            changed |= DrawValueChoice("Flare color", value2, flare_colors, std::size(flare_colors));
-            if (ImGui::InputInt("Legacy value 1", &value1)) changed = true;
+            changed |= DrawValueChoice("Color del destello", value2, flare_colors, std::size(flare_colors));
+            if (ImGui::InputInt("Valor antiguo 1", &value1)) changed = true;
             break;
         case 176: { // Tube
-            changed |= DrawValueChoice("Tube appearance", value1, tube_forms, std::size(tube_forms));
+            changed |= DrawValueChoice("Aspecto del tubo", value1, tube_forms, std::size(tube_forms));
             bool contains_liquid = value2 != 0;
-            if (ImGui::Checkbox("Contains liquid", &contains_liquid)) {
+            if (ImGui::Checkbox("Contiene líquido", &contains_liquid)) {
                 value2 = contains_liquid ? 1 : 0;
                 changed = true;
             }
             break;
         }
         case 174: // Barrel spawner
-            changed |= DrawValueChoice("Spawn direction", value1, spawn_directions, std::size(spawn_directions));
-            if (ImGui::InputInt("Spawn interval", &value2)) changed = true;
+            changed |= DrawValueChoice("Dirección de aparición", value1, spawn_directions, std::size(spawn_directions));
+            if (ImGui::InputInt("Intervalo de aparición", &value2)) changed = true;
             break;
         default:
-            if (ImGui::InputInt("Object value 1", &value1)) changed = true;
-            if (ImGui::InputInt("Object value 2", &value2)) changed = true;
+            if (ImGui::InputInt("Valor 1 del objeto", &value1)) changed = true;
+            if (ImGui::InputInt("Valor 2 del objeto", &value2)) changed = true;
             break;
     }
     if (changed) {
@@ -256,13 +259,13 @@ bool DrawObjectTypeCombo(const char* label, std::uint32_t& object_id, char* filt
     if (current)
         std::snprintf(preview, sizeof(preview), "%u — %s", current->id, current->label);
     else
-        std::snprintf(preview, sizeof(preview), "%u — Unknown object", object_id);
+        std::snprintf(preview, sizeof(preview), "%u — objeto desconocido", object_id);
     bool changed = false;
     if (ImGui::BeginCombo(label, preview)) {
         char filter_label[64];
         std::snprintf(filter_label, sizeof(filter_label), "##%s-filter", label);
         ImGui::SetNextItemWidth(-1.0f);
-        ImGui::InputTextWithHint(filter_label, "Search by name or ID", filter, 64);
+        ImGui::InputTextWithHint(filter_label, "Buscar por nombre o ID", filter, 64);
         ObjectCategory previous = ObjectCategory::RuntimeOnly;
         bool first = true;
         for (const ObjectDefinition& definition : kObjectCatalog) {
@@ -295,14 +298,70 @@ void ReleaseAtlases(EditorState& state) {
 }
 
 std::filesystem::path FindTextureDirectory(const std::filesystem::path& map_path) {
-    std::filesystem::path directory = map_path.parent_path();
-    for (int depth = 0; depth < 5 && !directory.empty(); ++depth) {
-        const std::filesystem::path candidate = directory / "textures";
-        if (std::filesystem::is_directory(candidate))
-            return candidate;
-        directory = directory.parent_path();
+    std::filesystem::path directory = std::filesystem::absolute(map_path).parent_path();
+    std::filesystem::path nearby_fallback;
+    while (!directory.empty()) {
+        const std::filesystem::path game_assets = directory / "data" / "textures";
+        if (std::filesystem::is_directory(game_assets))
+            return game_assets;
+        if (directory.filename() == "data" && std::filesystem::is_directory(directory / "textures"))
+            return directory / "textures";
+        const std::filesystem::path nearby = directory / "textures";
+        if (nearby_fallback.empty() && std::filesystem::is_directory(nearby))
+            nearby_fallback = nearby;
+        const std::filesystem::path parent = directory.parent_path();
+        if (parent == directory)
+            break;
+        directory = parent;
     }
-    return {};
+    return nearby_fallback;
+}
+
+std::string Lowercase(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return value;
+}
+
+std::filesystem::path ResolveTexturePath(const std::filesystem::path& directory,
+                                         std::string filename) {
+    if (directory.empty() || filename.empty())
+        return {};
+    std::replace(filename.begin(), filename.end(), '\\', '/');
+    const std::filesystem::path relative(filename);
+    if (relative.is_absolute() || relative.has_root_name())
+        return {};
+
+    std::filesystem::path current = directory;
+    for (const auto& component : relative.lexically_normal()) {
+        const std::string part = component.string();
+        if (part.empty() || part == ".")
+            continue;
+        if (part == "..")
+            return {};
+
+        std::filesystem::path match = current / component;
+        std::error_code ec;
+        if (std::filesystem::exists(match, ec)) {
+            current = match;
+            continue;
+        }
+        if (!std::filesystem::is_directory(current, ec))
+            return {};
+
+        const std::string wanted = Lowercase(part);
+        bool found = false;
+        for (std::filesystem::directory_iterator it(current, ec), end; !ec && it != end; it.increment(ec)) {
+            if (Lowercase(it->path().filename().string()) == wanted) {
+                current = it->path();
+                found = true;
+                break;
+            }
+        }
+        if (!found)
+            return {};
+    }
+    return std::filesystem::is_regular_file(current) ? current : std::filesystem::path{};
 }
 
 void LoadAtlases(EditorState& state) {
@@ -312,26 +371,45 @@ void LoadAtlases(EditorState& state) {
     state.atlases.resize(state.map.header.tileset_count);
 
     for (std::size_t i = 0; i < state.atlases.size(); ++i) {
+        AtlasTexture& atlas = state.atlases[i];
         const char* name = state.map.header.tileset_names[i];
         std::size_t name_length = 0;
         while (name_length < sizeof(state.map.header.tileset_names[i]) && name[name_length] != '\0')
             ++name_length;
-        if (name_length == 0)
+        while (name_length > 0 && name[name_length - 1] == ' ')
+            --name_length;
+        atlas.filename.assign(name, name_length);
+        if (atlas.filename.empty()) {
+            atlas.error = "El nombre del tileset está vacío.";
             continue;
+        }
 
-        const std::filesystem::path filename(std::string(name, name_length));
-        std::filesystem::path image_path = map_directory / filename;
-        if (!std::filesystem::is_regular_file(image_path) && !texture_directory.empty())
-            image_path = texture_directory / filename;
-        SDL_Surface* source = IMG_Load(image_path.string().c_str());
-        if (source == nullptr)
+        std::filesystem::path image_path = ResolveTexturePath(texture_directory, atlas.filename);
+        if (image_path.empty())
+            image_path = ResolveTexturePath(map_directory, atlas.filename);
+        if (image_path.empty()) {
+            atlas.error = "No se encontró el archivo en data/textures ni junto al mapa.";
             continue;
+        }
+        atlas.source_path = image_path.string();
+
+        SDL_Surface* source = IMG_Load(image_path.string().c_str());
+        if (source == nullptr) {
+            atlas.error = std::string("No se pudo abrir la imagen: ") + IMG_GetError();
+            continue;
+        }
         SDL_Surface* rgba = SDL_ConvertSurfaceFormat(source, SDL_PIXELFORMAT_RGBA32, 0);
         SDL_FreeSurface(source);
-        if (rgba == nullptr)
+        if (rgba == nullptr) {
+            atlas.error = std::string("No se pudo convertir la imagen: ") + SDL_GetError();
             continue;
+        }
+        if (rgba->w < 240 || rgba->h < 240) {
+            atlas.error = "El atlas es menor que la cuadrícula requerida de 12 × 12 tiles de 20 px.";
+            SDL_FreeSurface(rgba);
+            continue;
+        }
 
-        AtlasTexture& atlas = state.atlases[i];
         atlas.width = rgba->w;
         atlas.height = rgba->h;
         glGenTextures(1, &atlas.texture);
@@ -342,6 +420,8 @@ void LoadAtlases(EditorState& state) {
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, rgba->w, rgba->h, 0,
                      GL_RGBA, GL_UNSIGNED_BYTE, rgba->pixels);
         SDL_FreeSurface(rgba);
+        if (atlas.texture == 0)
+            atlas.error = "OpenGL no pudo crear la textura del atlas.";
     }
     glBindTexture(GL_TEXTURE_2D, 0);
 }
@@ -350,7 +430,7 @@ bool LoadMap(EditorState& state) {
     std::string error;
     MapDocument loaded;
     if (!MapDocument::Load(state.map_path, loaded, error)) {
-        std::snprintf(state.message, sizeof(state.message), "Open failed: %s", error.c_str());
+        std::snprintf(state.message, sizeof(state.message), "Error al abrir: %s", error.c_str());
         return false;
     }
     state.map = std::move(loaded);
@@ -364,7 +444,7 @@ bool LoadMap(EditorState& state) {
     state.selection_x0 = state.selection_y0 = 0;
     state.selection_x1 = state.selection_y1 = 0;
     state.selecting = state.selection_mode = false;
-    std::snprintf(state.message, sizeof(state.message), "Loaded %s (%u x %u, %zu objects)",
+    std::snprintf(state.message, sizeof(state.message), "Cargado: %s (%u × %u, %zu objetos)",
                   state.map_path, state.map.width(), state.map.height(), state.map.objects.size());
     return true;
 }
@@ -375,11 +455,11 @@ bool SaveMap(EditorState& state) {
     state.map.header.object_count = static_cast<std::uint32_t>(state.map.objects.size());
     std::string error;
     if (!state.map.Save(state.map_path, error)) {
-        std::snprintf(state.message, sizeof(state.message), "Save failed: %s", error.c_str());
+        std::snprintf(state.message, sizeof(state.message), "Error al guardar: %s", error.c_str());
         return false;
     }
     state.dirty = false;
-    std::snprintf(state.message, sizeof(state.message), "Saved %s", state.map_path);
+    std::snprintf(state.message, sizeof(state.message), "Guardado: %s", state.map_path);
     return true;
 }
 
@@ -388,7 +468,7 @@ void CreateNewMap(EditorState& state) {
     std::string error;
     if (!MapDocument::CreateEmpty(static_cast<std::uint32_t>(state.new_map_width),
                                   static_cast<std::uint32_t>(state.new_map_height), created, error)) {
-        std::snprintf(state.message, sizeof(state.message), "New map failed: %s", error.c_str());
+        std::snprintf(state.message, sizeof(state.message), "Error al crear el mapa: %s", error.c_str());
         return;
     }
     ReleaseAtlases(state);
@@ -402,7 +482,7 @@ void CreateNewMap(EditorState& state) {
     state.brush_tileset = 0;
     state.brush_art = 0;
     state.map_path[0] = '\0';
-    std::snprintf(state.message, sizeof(state.message), "Blank map created (%u x %u); use Save As.",
+    std::snprintf(state.message, sizeof(state.message), "Mapa vacío creado (%u × %u); usa Guardar como.",
                   state.map.width(), state.map.height());
 }
 
@@ -419,7 +499,7 @@ void CopySelection(EditorState& state) {
         for (int x = x0; x <= x1; ++x)
             state.tile_clipboard.push_back(state.map.tile(static_cast<std::uint32_t>(x), static_cast<std::uint32_t>(y)));
     state.has_clipboard = !state.tile_clipboard.empty();
-    std::snprintf(state.message, sizeof(state.message), "Copied tile region (%u x %u).",
+    std::snprintf(state.message, sizeof(state.message), "Región copiada (%u × %u tiles).",
                   state.clipboard_width, state.clipboard_height);
 }
 
@@ -456,8 +536,8 @@ void FillSelectionWithBrush(EditorState& state) {
     const int y0 = std::min(state.selection_y0, state.selection_y1);
     const int x1 = std::max(state.selection_x0, state.selection_x1);
     const int y1 = std::max(state.selection_y0, state.selection_y1);
-    const std::uint8_t set = static_cast<std::uint8_t>(std::clamp(state.brush_tileset, 0, 255));
-    const std::uint8_t art = static_cast<std::uint8_t>(std::clamp(state.brush_art, 0, 255));
+    const std::uint8_t set = static_cast<std::uint8_t>(std::clamp(state.brush_tileset, 0, 63));
+    const std::uint8_t art = static_cast<std::uint8_t>(std::clamp(state.brush_art, 0, 144));
     bool changed = false;
     for (int y = y0; y <= y1; ++y) for (int x = x0; x <= x1; ++x) {
         MapTile& tile = state.map.tile(static_cast<std::uint32_t>(x), static_cast<std::uint32_t>(y));
@@ -474,7 +554,7 @@ void FillSelectionWithBrush(EditorState& state) {
 
 ImU32 TileColor(const MapTile& tile) {
     ImVec4 color;
-    if (tile.tileset_back == 0 && tile.tileset_front == 0) {
+    if (tile.art_back == 0 && tile.art_front == 0) {
         color = ImGui::ColorConvertU32ToFloat4(IM_COL32(29, 34, 43, 255));
     } else {
         const unsigned int seed = static_cast<unsigned int>(tile.tileset_back) * 71u +
@@ -494,10 +574,22 @@ ImU32 TileColor(const MapTile& tile) {
     return ImGui::ColorConvertFloat4ToU32(color);
 }
 
+float SidebarWidth() {
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    const float desired = std::clamp(viewport->WorkSize.x * 0.30f, 320.0f, 440.0f);
+    return std::min(desired, viewport->WorkSize.x * 0.42f);
+}
+
 void DrawMapCanvas(EditorState& state) {
-    ImGui::Begin("Level map");
-    ImGui::TextDisabled("Uses game texture atlases when available; missing assets are shown schematically.");
-    if (ImGui::Checkbox("Paint brush", &state.paint_mode) && state.paint_mode) {
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    const float sidebar_width = SidebarWidth();
+    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + sidebar_width, viewport->WorkPos.y), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(viewport->WorkSize.x - sidebar_width, viewport->WorkSize.y), ImGuiCond_Always);
+    constexpr ImGuiWindowFlags fixed_panel = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+                                             ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings;
+    ImGui::Begin("Mapa", nullptr, fixed_panel);
+    ImGui::TextDisabled("Usa los atlas de texturas del juego; los archivos que falten se indicarán aquí.");
+    if (ImGui::Checkbox("Pincel", &state.paint_mode) && state.paint_mode) {
         state.selection_mode = false;
         state.selecting = false;
     }
@@ -505,7 +597,7 @@ void DrawMapCanvas(EditorState& state) {
     ImGui::SliderFloat("Zoom", &state.zoom, 0.20f, 2.0f, "%.2fx");
 
     if (!state.loaded) {
-        ImGui::TextWrapped("Open a Hurrican .map file to inspect and edit it.");
+        ImGui::TextWrapped("Abre un archivo .map de Hurrican para verlo y editarlo.");
         ImGui::End();
         return;
     }
@@ -536,14 +628,15 @@ void DrawMapCanvas(EditorState& state) {
             const ImVec2 p1(p0.x + cell, p0.y + cell);
             draw->AddRectFilled(p0, p1, TileColor(tile));
             const auto draw_layer = [&](std::uint8_t tileset, std::uint8_t art) {
-                if (tileset == 0 || tileset > state.atlases.size() || art >= 144)
+                if (art == 0 || art > 144 || tileset >= state.atlases.size())
                     return;
-                const AtlasTexture& atlas = state.atlases[tileset - 1];
+                const AtlasTexture& atlas = state.atlases[tileset];
                 if (atlas.texture == 0 || atlas.width < 240 || atlas.height < 240)
                     return;
                 constexpr float tile_size = 20.0f;
-                const float u0 = (art % 12) * tile_size / atlas.width;
-                const float v0 = (art / 12) * tile_size / atlas.height;
+                const unsigned int art_index = static_cast<unsigned int>(art - 1);
+                const float u0 = (art_index % 12) * tile_size / atlas.width;
+                const float v0 = (art_index / 12) * tile_size / atlas.height;
                 const float u1 = u0 + tile_size / atlas.width;
                 const float v1 = v0 + tile_size / atlas.height;
                 const ImU32 tint = IM_COL32(tile.red, tile.green, tile.blue, tile.alpha);
@@ -603,11 +696,11 @@ void DrawMapCanvas(EditorState& state) {
             } else if (state.paint_mode) {
                 MapTile& tile = state.map.tile(static_cast<std::uint32_t>(x), static_cast<std::uint32_t>(y));
                 if (state.brush_layer == 0) {
-                    tile.tileset_back = static_cast<std::uint8_t>(std::clamp(state.brush_tileset, 0, 255));
-                    tile.art_back = static_cast<std::uint8_t>(std::clamp(state.brush_art, 0, 255));
+                    tile.tileset_back = static_cast<std::uint8_t>(std::clamp(state.brush_tileset, 0, 63));
+                    tile.art_back = static_cast<std::uint8_t>(std::clamp(state.brush_art, 0, 144));
                 } else {
-                    tile.tileset_front = static_cast<std::uint8_t>(std::clamp(state.brush_tileset, 0, 255));
-                    tile.art_front = static_cast<std::uint8_t>(std::clamp(state.brush_art, 0, 255));
+                    tile.tileset_front = static_cast<std::uint8_t>(std::clamp(state.brush_tileset, 0, 63));
+                    tile.art_front = static_cast<std::uint8_t>(std::clamp(state.brush_art, 0, 144));
                 }
                 state.dirty = true;
             } else {
@@ -642,8 +735,8 @@ void DrawMapCanvas(EditorState& state) {
         const int y = static_cast<int>((mouse.y - origin.y) / cell);
         if (x >= 0 && y >= 0 && x < static_cast<int>(state.map.width()) && y < static_cast<int>(state.map.height())) {
             MapTile& tile = state.map.tile(static_cast<std::uint32_t>(x), static_cast<std::uint32_t>(y));
-            const std::uint8_t set = static_cast<std::uint8_t>(std::clamp(state.brush_tileset, 0, 255));
-            const std::uint8_t art = static_cast<std::uint8_t>(std::clamp(state.brush_art, 0, 255));
+            const std::uint8_t set = static_cast<std::uint8_t>(std::clamp(state.brush_tileset, 0, 63));
+            const std::uint8_t art = static_cast<std::uint8_t>(std::clamp(state.brush_art, 0, 144));
             std::uint8_t& tile_set = state.brush_layer == 0 ? tile.tileset_back : tile.tileset_front;
             std::uint8_t& tile_art = state.brush_layer == 0 ? tile.art_back : tile.art_front;
             if (tile_set != set || tile_art != art) {
@@ -674,23 +767,28 @@ void DrawMapCanvas(EditorState& state) {
 }
 
 void DrawInspector(EditorState& state) {
-    ImGui::Begin("Level properties and tools");
-    ImGui::InputText("Map path", state.map_path, sizeof(state.map_path));
-    if (ImGui::Button("Open…")) {
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->WorkPos, ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(SidebarWidth(), viewport->WorkSize.y), ImGuiCond_Always);
+    constexpr ImGuiWindowFlags fixed_panel = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+                                             ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings;
+    ImGui::Begin("Herramientas y propiedades", nullptr, fixed_panel);
+    ImGui::InputText("Ruta del mapa", state.map_path, sizeof(state.map_path));
+    if (ImGui::Button("Abrir…")) {
         if (state.dirty)
-            std::snprintf(state.message, sizeof(state.message), "Save the current map before opening another one.");
+            std::snprintf(state.message, sizeof(state.message), "Guarda el mapa actual antes de abrir otro.");
         else if (hurrican::editor::ChooseMapToOpen(state.map_path, sizeof(state.map_path)))
             LoadMap(state);
     }
     ImGui::SameLine();
     ImGui::BeginDisabled(!state.loaded || state.map_path[0] == '\0');
-    if (ImGui::Button("Save")) SaveMap(state);
+    if (ImGui::Button("Guardar")) SaveMap(state);
     ImGui::EndDisabled();
     ImGui::SameLine();
     ImGui::BeginDisabled(!state.loaded);
-    if (ImGui::Button("Save As…")) {
-        if (hurrican::editor::ChooseMapToSave(state.map_path, sizeof(state.map_path)) && SaveMap(state))
-            LoadAtlases(state);
+    if (ImGui::Button("Guardar como…")) {
+        if (hurrican::editor::ChooseMapToSave(state.map_path, sizeof(state.map_path)))
+            SaveMap(state);
     }
     ImGui::EndDisabled();
 
@@ -701,57 +799,80 @@ void DrawInspector(EditorState& state) {
         return;
     }
 
-    ImGui::SeparatorText("Level header");
-    ImGui::Text("Dimensions: %u x %u tiles", state.map.width(), state.map.height());
-    ImGui::Text("Tilesets: %u    Objects: %zu", state.map.header.tileset_count, state.map.objects.size());
+    ImGui::SeparatorText("Datos del nivel");
+    ImGui::Text("Dimensiones: %u × %u tiles", state.map.width(), state.map.height());
+    ImGui::Text("Tilesets: %u    Objetos: %zu", state.map.header.tileset_count, state.map.objects.size());
     char description[101];
     CopyToField(description, sizeof(description), state.map.header.description,
                 sizeof(state.map.header.description));
-    if (ImGui::InputText("Description", description, sizeof(description))) {
+    if (ImGui::InputText("Descripción", description, sizeof(description))) {
         CopyFromField(state.map.header.description, sizeof(state.map.header.description), description);
         state.dirty = true;
     }
     int time_limit = static_cast<int>(state.map.header.time_limit);
-    if (ImGui::InputInt("Time limit", &time_limit)) {
+    if (ImGui::InputInt("Límite de tiempo", &time_limit)) {
         state.map.header.time_limit = static_cast<std::uint32_t>(std::max(0, time_limit));
         state.dirty = true;
     }
-    ImGui::Text("Selected tile: %d, %d", state.selected_x, state.selected_y);
+    ImGui::Text("Tile seleccionado: %d, %d", state.selected_x, state.selected_y);
 
-    ImGui::SeparatorText("Background and level assets");
+    ImGui::SeparatorText("Fondo y recursos del nivel");
     bool header_changed = false;
-    header_changed |= EditFixedText("Background image", state.map.header.background_file,
+    header_changed |= EditFixedText("Imagen de fondo", state.map.header.background_file,
                                     sizeof(state.map.header.background_file));
-    header_changed |= EditFixedText("Parallax A", state.map.header.parallax_a_file,
+    header_changed |= EditFixedText("Paralaje A", state.map.header.parallax_a_file,
                                     sizeof(state.map.header.parallax_a_file));
-    header_changed |= EditFixedText("Parallax B", state.map.header.parallax_b_file,
+    header_changed |= EditFixedText("Paralaje B", state.map.header.parallax_b_file,
                                     sizeof(state.map.header.parallax_b_file));
-    header_changed |= EditFixedText("Cloud layer", state.map.header.cloud_file,
+    header_changed |= EditFixedText("Capa de nubes", state.map.header.cloud_file,
                                     sizeof(state.map.header.cloud_file));
     bool scroll_background = state.map.header.scroll_background != 0;
-    if (ImGui::Checkbox("Scroll background", &scroll_background)) {
+    if (ImGui::Checkbox("Desplazar el fondo", &scroll_background)) {
         state.map.header.scroll_background = scroll_background ? 1 : 0;
         header_changed = true;
     }
     if (header_changed) state.dirty = true;
 
-    ImGui::SeparatorText("Tileset files");
+    ImGui::SeparatorText("Archivos de tileset (índices 0–63)");
     bool tilesets_changed = false;
-    for (int i = 0; i < state.map.header.tileset_count; ++i) {
-        char label[32];
-        std::snprintf(label, sizeof(label), "Tileset %d", i + 1);
-        if (EditFixedText(label, state.map.header.tileset_names[i], sizeof(state.map.header.tileset_names[i]))) {
-            tilesets_changed = true;
-            state.dirty = true;
+    if (ImGui::BeginTable("tileset-files", 3, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_RowBg)) {
+        ImGui::TableSetupColumn("N.º", ImGuiTableColumnFlags_WidthFixed, 38.0f);
+        ImGui::TableSetupColumn("Archivo PNG", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Estado", ImGuiTableColumnFlags_WidthFixed, 54.0f);
+        ImGui::TableHeadersRow();
+        for (int i = 0; i < state.map.header.tileset_count; ++i) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("%02d", i);
+            ImGui::TableSetColumnIndex(1);
+            ImGui::PushID(i);
+            if (EditFixedText("##nombre-tileset", state.map.header.tileset_names[i],
+                              sizeof(state.map.header.tileset_names[i]))) {
+                tilesets_changed = true;
+                state.dirty = true;
+            }
+            ImGui::TableSetColumnIndex(2);
+            const AtlasTexture& atlas = state.atlases[static_cast<std::size_t>(i)];
+            if (atlas.texture != 0) {
+                ImGui::TextColored(ImVec4(0.35f, 0.85f, 0.50f, 1.0f), "OK");
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("Cargado desde: %s", atlas.source_path.c_str());
+            } else {
+                ImGui::TextColored(ImVec4(1.0f, 0.38f, 0.32f, 1.0f), "Falta");
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", atlas.error.c_str());
+            }
+            ImGui::PopID();
         }
+        ImGui::EndTable();
     }
     if (state.map.header.tileset_count < 64) {
-        ImGui::InputText("New tileset PNG", state.new_tileset_name, sizeof(state.new_tileset_name));
-        if (ImGui::Button("Add tileset") && state.new_tileset_name[0] != '\0') {
-            CopyFromField(state.map.header.tileset_names[state.map.header.tileset_count],
+        ImGui::InputText("PNG nuevo (nombre del archivo)", state.new_tileset_name, sizeof(state.new_tileset_name));
+        if (ImGui::Button("Añadir tileset") && state.new_tileset_name[0] != '\0') {
+            const std::size_t new_index = state.map.header.tileset_count;
+            CopyFromField(state.map.header.tileset_names[new_index],
                           sizeof(state.map.header.tileset_names[0]), state.new_tileset_name);
+            state.brush_tileset = static_cast<int>(new_index);
             ++state.map.header.tileset_count;
-            state.brush_tileset = 1;
+            state.brush_art = 1;
             state.new_tileset_name[0] = '\0';
             tilesets_changed = true;
             state.dirty = true;
@@ -759,63 +880,81 @@ void DrawInspector(EditorState& state) {
     }
     if (tilesets_changed) LoadAtlases(state);
 
-    ImGui::SeparatorText("Music, liquids and extras");
+    ImGui::SeparatorText("Música, líquidos y extras");
     bool appendix_changed = false;
-    appendix_changed |= EditFixedText("Stage music (.it)", state.map.appendix.songs[0], sizeof(state.map.appendix.songs[0]));
-    appendix_changed |= EditFixedText("Boss music (.it)", state.map.appendix.songs[1], sizeof(state.map.appendix.songs[1]));
+    appendix_changed |= EditFixedText("Música del nivel (.it)", state.map.appendix.songs[0], sizeof(state.map.appendix.songs[0]));
+    appendix_changed |= EditFixedText("Música del jefe (.it)", state.map.appendix.songs[1], sizeof(state.map.appendix.songs[1]));
     int powerblock = state.map.appendix.powerblock_id;
-    if (ImGui::InputInt("Powerblock ID", &powerblock)) {
+    if (ImGui::InputInt("ID del bloque de poder", &powerblock)) {
         state.map.appendix.powerblock_id = powerblock;
         appendix_changed = true;
     }
-    appendix_changed |= EditFixedText("Liquid color 1", state.map.appendix.liquid_color_1, sizeof(state.map.appendix.liquid_color_1));
-    appendix_changed |= EditFixedText("Liquid color 2", state.map.appendix.liquid_color_2, sizeof(state.map.appendix.liquid_color_2));
+    appendix_changed |= EditFixedText("Color de líquido 1", state.map.appendix.liquid_color_1, sizeof(state.map.appendix.liquid_color_1));
+    appendix_changed |= EditFixedText("Color de líquido 2", state.map.appendix.liquid_color_2, sizeof(state.map.appendix.liquid_color_2));
     bool flashlight = state.map.appendix.flashlight != 0;
-    if (ImGui::Checkbox("Flashlight effect", &flashlight)) {
+    if (ImGui::Checkbox("Efecto de linterna", &flashlight)) {
         state.map.appendix.flashlight = flashlight ? 1 : 0;
         appendix_changed = true;
     }
     if (appendix_changed) state.dirty = true;
 
-    ImGui::SeparatorText("Tile brush / selected tile");
-    ImGui::Combo("Layer", &state.brush_layer, "Background\0Foreground\0");
+    ImGui::SeparatorText("Pincel de tiles");
+    ImGui::Combo("Capa", &state.brush_layer, "Fondo\0Frente\0");
     if (state.map.header.tileset_count == 0) {
         state.brush_tileset = 0;
-        ImGui::TextDisabled("No tileset yet; add a PNG above before painting artwork.");
+        ImGui::TextDisabled("Este mapa no tiene tilesets. Añade un PNG para pintar gráficos.");
     } else {
-        state.brush_tileset = std::clamp(state.brush_tileset, 1, static_cast<int>(state.map.header.tileset_count));
-        char selected_tileset[17];
-        CopyToField(selected_tileset, sizeof(selected_tileset),
-                    state.map.header.tileset_names[state.brush_tileset - 1], 16);
-        if (ImGui::BeginCombo("Tileset", selected_tileset)) {
+        state.brush_tileset = std::clamp(state.brush_tileset, 0,
+                                         static_cast<int>(state.map.header.tileset_count) - 1);
+        char selected_tileset[96];
+        char selected_name[17];
+        CopyToField(selected_name, sizeof(selected_name),
+                    state.map.header.tileset_names[state.brush_tileset], 16);
+        std::snprintf(selected_tileset, sizeof(selected_tileset), "%02d — %.64s",
+                      state.brush_tileset, selected_name);
+        if (ImGui::BeginCombo("Atlas activo", selected_tileset)) {
             for (int i = 0; i < state.map.header.tileset_count; ++i) {
-                char name[17];
-                CopyToField(name, sizeof(name), state.map.header.tileset_names[i], 16);
-                const bool selected = state.brush_tileset == i + 1;
-                if (ImGui::Selectable(name, selected)) state.brush_tileset = i + 1;
+                char display_name[17];
+                CopyToField(display_name, sizeof(display_name), state.map.header.tileset_names[i], 16);
+                char name[96];
+                std::snprintf(name, sizeof(name), "%02d — %.64s", i, display_name);
+                const bool selected = state.brush_tileset == i;
+                if (ImGui::Selectable(name, selected)) state.brush_tileset = i;
                 if (selected) ImGui::SetItemDefaultFocus();
             }
             ImGui::EndCombo();
         }
     }
-    state.brush_art = std::clamp(state.brush_art, 0, 143);
-    ImGui::InputInt("Tile art index", &state.brush_art);
-    state.brush_art = std::clamp(state.brush_art, 0, 143);
-    if (state.brush_tileset > 0 && state.brush_tileset <= static_cast<int>(state.atlases.size())) {
-        const AtlasTexture& palette = state.atlases[state.brush_tileset - 1];
+    state.brush_art = std::clamp(state.brush_art, 0, 144);
+    ImGui::InputInt("Gráfico (0 = vacío; 1–144)", &state.brush_art);
+    state.brush_art = std::clamp(state.brush_art, 0, 144);
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Borrar")) state.brush_art = 0;
+
+    if (state.brush_tileset >= 0 && state.brush_tileset < static_cast<int>(state.atlases.size())) {
+        const AtlasTexture& palette = state.atlases[static_cast<std::size_t>(state.brush_tileset)];
         if (palette.texture != 0) {
-            ImGui::TextDisabled("Click a cell in the tileset to choose the brush tile.");
-            ImGui::Image(static_cast<ImTextureID>(palette.texture), ImVec2(256.0f, 256.0f));
+            ImGui::TextDisabled("%02d — %s", state.brush_tileset, palette.filename.c_str());
+            ImGui::TextDisabled("Ruta: %s", palette.source_path.c_str());
+            ImGui::TextDisabled("Haz clic en una celda para elegirla; el índice de datos empieza en 1.");
+            const float scale = std::min(256.0f / palette.width, 256.0f / palette.height);
+            const ImVec2 preview_size(palette.width * scale, palette.height * scale);
+            ImGui::Image(static_cast<ImTextureID>(palette.texture), preview_size);
             if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
                 const ImVec2 top_left = ImGui::GetItemRectMin();
                 const ImVec2 mouse = ImGui::GetIO().MousePos;
-                const int atlas_x = static_cast<int>((mouse.x - top_left.x) * palette.width / 256.0f);
-                const int atlas_y = static_cast<int>((mouse.y - top_left.y) * palette.height / 256.0f);
+                const int atlas_x = static_cast<int>((mouse.x - top_left.x) * palette.width / preview_size.x);
+                const int atlas_y = static_cast<int>((mouse.y - top_left.y) * palette.height / preview_size.y);
                 const int col = atlas_x / 20;
                 const int row = atlas_y / 20;
                 if (col >= 0 && col < 12 && row >= 0 && row < 12)
-                    state.brush_art = row * 12 + col;
+                    state.brush_art = row * 12 + col + 1;
             }
+        } else {
+            ImGui::TextColored(ImVec4(1.0f, 0.38f, 0.32f, 1.0f),
+                               "No se cargó el atlas %02d (%s).", state.brush_tileset,
+                               palette.filename.c_str());
+            ImGui::TextWrapped("%s", palette.error.c_str());
         }
     }
     if (state.selected_x >= 0 && state.selected_y >= 0) {
@@ -823,9 +962,9 @@ void DrawInspector(EditorState& state) {
                                        static_cast<std::uint32_t>(state.selected_y));
         int tileset = state.brush_layer == 0 ? tile.tileset_back : tile.tileset_front;
         int art = state.brush_layer == 0 ? tile.art_back : tile.art_front;
-        ImGui::Text("Current layer: tileset %d, art %d", tileset, art);
+        ImGui::Text("Capa activa: tileset %d, gráfico %d", tileset, art);
         float color[4] = {tile.red / 255.0f, tile.green / 255.0f, tile.blue / 255.0f, tile.alpha / 255.0f};
-        if (ImGui::ColorEdit4("Tile tint", color)) {
+        if (ImGui::ColorEdit4("Tinte del tile", color)) {
             tile.red = static_cast<std::uint8_t>(std::lround(std::clamp(color[0], 0.0f, 1.0f) * 255.0f));
             tile.green = static_cast<std::uint8_t>(std::lround(std::clamp(color[1], 0.0f, 1.0f) * 255.0f));
             tile.blue = static_cast<std::uint8_t>(std::lround(std::clamp(color[2], 0.0f, 1.0f) * 255.0f));
@@ -833,20 +972,20 @@ void DrawInspector(EditorState& state) {
             state.dirty = true;
         }
         std::uint32_t flags = tile.block_flags;
-        if (ImGui::InputScalar("Block flags (hex value)", ImGuiDataType_U32, &flags, nullptr, nullptr, "%08X")) {
+        if (ImGui::InputScalar("Propiedades del bloque (hexadecimal)", ImGuiDataType_U32, &flags, nullptr, nullptr, "%08X")) {
             tile.block_flags = flags;
             state.dirty = true;
         }
         struct BlockFlag { const char* label; std::uint32_t value; };
         static constexpr BlockFlag block_flags[] = {
-            {"Wall", 0x000001}, {"Enemy wall", 0x000002}, {"Platform", 0x000004},
-            {"Lighting", 0x000008}, {"Hide player/object", 0x000010}, {"Animated back", 0x000020},
-            {"Animated front", 0x000040}, {"Water", 0x000080}, {"Damage", 0x000100},
-            {"Belt left", 0x000200}, {"Belt right", 0x000400}, {"Turn point", 0x000800},
-            {"Destructible", 0x001000}, {"Move left", 0x002000}, {"Overlay lighting", 0x004000},
-            {"Swamp", 0x008000}, {"Ice", 0x010000}, {"Move vertically", 0x020000},
-            {"Waterfall", 0x040000}, {"Move right", 0x080000}, {"Slope left", 0x200000},
-            {"Slope right", 0x400000}, {"Liquid", 0x800000},
+            {"Pared", 0x000001}, {"Pared para enemigos", 0x000002}, {"Plataforma", 0x000004},
+            {"Iluminación", 0x000008}, {"Ocultar jugador/objeto", 0x000010}, {"Fondo animado", 0x000020},
+            {"Frente animado", 0x000040}, {"Agua", 0x000080}, {"Daño", 0x000100},
+            {"Cinta hacia la izquierda", 0x000200}, {"Cinta hacia la derecha", 0x000400}, {"Punto de giro", 0x000800},
+            {"Destructible", 0x001000}, {"Mover a la izquierda", 0x002000}, {"Iluminación superpuesta", 0x004000},
+            {"Pantano", 0x008000}, {"Hielo", 0x010000}, {"Movimiento vertical", 0x020000},
+            {"Cascada", 0x040000}, {"Mover a la derecha", 0x080000}, {"Pendiente izquierda", 0x200000},
+            {"Pendiente derecha", 0x400000}, {"Líquido", 0x800000},
         };
         if (ImGui::BeginTable("block-flag-grid", 2)) {
             for (std::size_t i = 0; i < std::size(block_flags); i += 2) {
@@ -866,29 +1005,29 @@ void DrawInspector(EditorState& state) {
             }
             ImGui::EndTable();
         }
-        ImGui::TextDisabled("Tile indices are edited directly; texture names are preserved from the original map.");
+        ImGui::TextDisabled("Se editan los índices directamente; se conservan los nombres de textura del mapa.");
     }
 
-    ImGui::SeparatorText("Rectangular selection and clipboard");
-    if (ImGui::Checkbox("Selection tool", &state.selection_mode) && state.selection_mode) {
+    ImGui::SeparatorText("Selección rectangular y portapapeles");
+    if (ImGui::Checkbox("Herramienta de selección", &state.selection_mode) && state.selection_mode) {
         state.paint_mode = false;
         state.selecting = false;
     }
-    ImGui::Text("Selection: %d x %d tiles",
+    ImGui::Text("Selección: %d × %d tiles",
                 std::abs(state.selection_x1 - state.selection_x0) + 1,
                 std::abs(state.selection_y1 - state.selection_y0) + 1);
     ImGui::BeginDisabled(!state.selection_mode);
-    if (ImGui::Button("Copy selection")) CopySelection(state);
+    if (ImGui::Button("Copiar selección")) CopySelection(state);
     ImGui::SameLine();
-    if (ImGui::Button("Fill with brush")) FillSelectionWithBrush(state);
+    if (ImGui::Button("Rellenar con pincel")) FillSelectionWithBrush(state);
     ImGui::EndDisabled();
     ImGui::SameLine();
     ImGui::BeginDisabled(!state.has_clipboard);
-    if (ImGui::Button("Paste at selected tile")) PasteClipboard(state);
+    if (ImGui::Button("Pegar en el tile seleccionado")) PasteClipboard(state);
     ImGui::EndDisabled();
 
-    ImGui::SeparatorText("Objects");
-    if (ImGui::Button("Add player start")) {
+    ImGui::SeparatorText("Objetos");
+    if (ImGui::Button("Añadir inicio del jugador")) {
         MapObject object{};
         object.id = 0;
         object.x = state.selected_x * 20;
@@ -900,11 +1039,11 @@ void DrawInspector(EditorState& state) {
         state.dirty = true;
     }
     std::uint32_t new_object_id = static_cast<std::uint32_t>(std::max(0, state.new_object_id));
-    if (DrawObjectTypeCombo("New object type", new_object_id, state.object_search))
+    if (DrawObjectTypeCombo("Tipo de objeto nuevo", new_object_id, state.object_search))
         state.new_object_id = static_cast<int>(new_object_id);
-    ImGui::InputInt("Custom new object ID", &state.new_object_id);
+    ImGui::InputInt("ID personalizado del objeto nuevo", &state.new_object_id);
     state.new_object_id = std::clamp(state.new_object_id, 0, 65535);
-    if (ImGui::Button("Add object at selection")) {
+    if (ImGui::Button("Añadir objeto en la selección")) {
         MapObject object{};
         object.id = static_cast<std::uint32_t>(state.new_object_id);
         object.x = state.selected_x * 20;
@@ -917,30 +1056,30 @@ void DrawInspector(EditorState& state) {
     }
     if (state.selected_object >= 0 && state.selected_object < static_cast<int>(state.map.objects.size())) {
         MapObject& selected = state.map.objects[static_cast<std::size_t>(state.selected_object)];
-        ImGui::SeparatorText("Selected object properties");
-        if (DrawObjectTypeCombo("Object type", selected.id, state.object_search)) state.dirty = true;
+        ImGui::SeparatorText("Propiedades del objeto seleccionado");
+        if (DrawObjectTypeCombo("Tipo de objeto", selected.id, state.object_search)) state.dirty = true;
         int id = static_cast<int>(selected.id);
-        if (ImGui::InputInt("Custom object ID", &id)) {
+        if (ImGui::InputInt("ID personalizado del objeto", &id)) {
             selected.id = static_cast<std::uint32_t>(std::max(0, id));
             state.dirty = true;
         }
         int x = selected.x;
-        if (ImGui::InputInt("Object X (pixels)", &x)) { selected.x = x; state.dirty = true; }
+        if (ImGui::InputInt("X del objeto (píxeles)", &x)) { selected.x = x; state.dirty = true; }
         int y = selected.y;
-        if (ImGui::InputInt("Object Y (pixels)", &y)) { selected.y = y; state.dirty = true; }
+        if (ImGui::InputInt("Y del objeto (píxeles)", &y)) { selected.y = y; state.dirty = true; }
         bool receives_light = selected.change_light != 0;
-        if (ImGui::Checkbox("Receives light", &receives_light)) {
+        if (ImGui::Checkbox("Recibe iluminación", &receives_light)) {
             selected.change_light = receives_light ? 1 : 0;
             state.dirty = true;
         }
         int skill = selected.skill;
-        if (ImGui::InputInt("Skill / difficulty", &skill)) {
+        if (ImGui::InputInt("Habilidad / dificultad", &skill)) {
             selected.skill = static_cast<std::uint8_t>(std::clamp(skill, 0, 255));
             state.dirty = true;
         }
-        ImGui::SeparatorText("Type-specific parameters");
+        ImGui::SeparatorText("Parámetros según el tipo");
         if (DrawTriggerFields(selected)) state.dirty = true;
-        if (ImGui::Button("Delete selected object")) {
+        if (ImGui::Button("Eliminar objeto seleccionado")) {
             state.map.objects.erase(state.map.objects.begin() + state.selected_object);
             state.selected_object = -1;
             state.map.header.object_count = static_cast<std::uint32_t>(state.map.objects.size());
@@ -953,7 +1092,7 @@ void DrawInspector(EditorState& state) {
         ImGui::TableSetupColumn("ID");
         ImGui::TableSetupColumn("X");
         ImGui::TableSetupColumn("Y");
-        ImGui::TableSetupColumn("Delete");
+        ImGui::TableSetupColumn("Eliminar");
         ImGui::TableHeadersRow();
         int remove_index = -1;
         for (int i = 0; i < static_cast<int>(state.map.objects.size()); ++i) {
@@ -976,7 +1115,7 @@ void DrawInspector(EditorState& state) {
             int y = object.y;
             if (ImGui::InputInt("##y", &y, 0, 0)) { object.y = y; state.dirty = true; }
             ImGui::TableSetColumnIndex(4);
-            if (ImGui::SmallButton("Remove")) remove_index = i;
+            if (ImGui::SmallButton("Quitar")) remove_index = i;
             ImGui::PopID();
         }
         ImGui::EndTable();
@@ -1006,7 +1145,7 @@ int main(int, char**) {
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 
-    SDL_Window* window = SDL_CreateWindow("Hurrican Map Editor — macOS Intel",
+    SDL_Window* window = SDL_CreateWindow("Editor de mapas de Hurrican — macOS Intel",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1440, 900,
         SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
     if (!window) {
@@ -1051,41 +1190,41 @@ int main(int, char**) {
         ImGui::NewFrame();
 
         if (ImGui::BeginMainMenuBar()) {
-            if (ImGui::BeginMenu("File")) {
-                if (ImGui::MenuItem("New blank map…")) ImGui::OpenPopup("New blank map");
-                if (ImGui::MenuItem("Open map…", nullptr, false, !state.dirty)) {
+            if (ImGui::BeginMenu("Archivo")) {
+                if (ImGui::MenuItem("Crear mapa vacío…")) ImGui::OpenPopup("Mapa nuevo vacío");
+                if (ImGui::MenuItem("Abrir mapa…", nullptr, false, !state.dirty)) {
                     if (hurrican::editor::ChooseMapToOpen(state.map_path, sizeof(state.map_path)))
                         LoadMap(state);
                 }
-                if (ImGui::MenuItem("Save", "⌘S", false,
+                if (ImGui::MenuItem("Guardar", "⌘S", false,
                                     state.loaded && state.dirty && state.map_path[0] != '\0'))
                     SaveMap(state);
-                if (ImGui::MenuItem("Save As…", nullptr, false, state.loaded)) {
-                    if (hurrican::editor::ChooseMapToSave(state.map_path, sizeof(state.map_path)) && SaveMap(state))
-                        LoadAtlases(state);
+                if (ImGui::MenuItem("Guardar como…", nullptr, false, state.loaded)) {
+                    if (hurrican::editor::ChooseMapToSave(state.map_path, sizeof(state.map_path)))
+                        SaveMap(state);
                 }
-                if (ImGui::MenuItem("Quit")) running = false;
+                if (ImGui::MenuItem("Salir")) running = false;
                 ImGui::EndMenu();
             }
-            ImGui::TextUnformatted(state.dirty ? "  Unsaved changes" : "  Hurrican .map editor");
+            ImGui::TextUnformatted(state.dirty ? "  Cambios sin guardar" : "  Editor de mapas de Hurrican");
             ImGui::EndMainMenuBar();
         }
-        if (ImGui::BeginPopupModal("New blank map", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-            ImGui::TextWrapped("Create an empty Hurrican .map level. Add a tileset and configure the level assets before testing in-game.");
-            ImGui::InputInt("Width (tiles)", &state.new_map_width);
-            ImGui::InputInt("Height (tiles)", &state.new_map_height);
+        if (ImGui::BeginPopupModal("Mapa nuevo vacío", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::TextWrapped("Crea un nivel .map vacío de Hurrican. Añade un tileset y configura los recursos antes de probarlo en el juego.");
+            ImGui::InputInt("Ancho (tiles)", &state.new_map_width);
+            ImGui::InputInt("Alto (tiles)", &state.new_map_height);
             state.new_map_width = std::clamp(state.new_map_width, 1, static_cast<int>(MapDocument::kMaxWidth));
             state.new_map_height = std::clamp(state.new_map_height, 1, static_cast<int>(MapDocument::kMaxHeight));
             if (state.dirty)
-                ImGui::TextColored(ImVec4(1, 0.35f, 0.25f, 1), "Save the current map before creating another.");
+                ImGui::TextColored(ImVec4(1, 0.35f, 0.25f, 1), "Guarda el mapa actual antes de crear otro.");
             ImGui::BeginDisabled(state.dirty);
-            if (ImGui::Button("Create blank map")) {
+            if (ImGui::Button("Crear mapa vacío")) {
                 CreateNewMap(state);
                 ImGui::CloseCurrentPopup();
             }
             ImGui::EndDisabled();
             ImGui::SameLine();
-            if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
+            if (ImGui::Button("Cancelar")) ImGui::CloseCurrentPopup();
             ImGui::EndPopup();
         }
         DrawInspector(state);

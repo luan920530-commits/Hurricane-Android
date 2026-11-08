@@ -1,14 +1,14 @@
-# Installing the first macOS editor build
+# Instalación de la primera versión para macOS
 
-This preview build is for **Intel Macs (`x86_64`) running macOS 12 Monterey or later**. It is an early port of the Hurrican level editor, not yet feature-complete.
+Esta versión preliminar es para **Mac Intel (`x86_64`) con macOS 12 Monterey o posterior**. Es un port inicial del editor de niveles de Hurrican; todavía no tiene todas las funciones del editor original.
 
-1. Download either `HurricanMapEditor-macOS12-Intel.dmg` or `HurricanMapEditor-macOS12-Intel.zip` from the GitHub Actions artifact.
-2. Open the DMG, or unzip the ZIP, and move **Hurrican Map Editor.app** to Applications (or another folder you control).
-3. The preview app is ad-hoc signed and not notarized. The first time macOS blocks it, Control-click/right-click the app, choose **Open**, and confirm. This one-time override may be required again after replacing the app with a newer build.
-4. Open a game's `.map` file with the app. To preview the correct tile atlas, keep the map in its game data tree so the editor can locate the sibling/ancestor `textures` directory.
+1. Descarga `HurricanMapEditor-macOS12-Intel.dmg` o `HurricanMapEditor-macOS12-Intel.zip` desde el artefacto de GitHub Actions.
+2. Abre el DMG o descomprime el ZIP y mueve **Hurrican Map Editor.app** a Aplicaciones (o a otra carpeta bajo tu control).
+3. La app tiene firma ad-hoc y no está notarizada. Si macOS la bloquea al abrirla por primera vez, haz clic derecho o Control-clic sobre la app, elige **Abrir** y confirma. Puede que tengas que repetir este paso al instalar una versión nueva.
+4. Abre un archivo `.map` del juego. Para que el editor encuentre el atlas correcto, conserva el mapa dentro de la estructura de datos del juego, cerca de `data/textures`.
 
-The app bundle contains the SDL runtime libraries used by the editor. It does not install or modify the game data. Back up maps before saving edits.
+La app incluye las bibliotecas SDL que necesita. No instala ni modifica los archivos del juego. Haz una copia de seguridad de los mapas antes de guardar cambios.
 
-## Build provenance
+## Sobre la compilación
 
-The GitHub Action builds an Intel-only app with a macOS 12.0 deployment target, runs the `.map` format tests, bundles non-system SDL dependencies, and publishes ZIP and DMG artifacts with SHA-256 checksums. No Apple Developer signing identity or notarization credentials are used for this preview.
+La GitHub Action genera una app Intel con destino mínimo macOS 12.0, ejecuta las pruebas del formato `.map`, incluye las bibliotecas SDL necesarias y publica ZIP y DMG con sumas SHA-256. Esta versión preliminar no usa firma Developer ID ni notarización de Apple.

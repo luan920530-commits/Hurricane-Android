@@ -37,7 +37,7 @@ target_compile_definitions(HurricanMapEditor PRIVATE SDL_MAIN_HANDLED)
 find_library(APPKIT_FRAMEWORK AppKit REQUIRED)
 target_link_libraries(HurricanMapEditor PRIVATE imgui SDL2::SDL2 SDL2_image::SDL2_image OpenGL::GL ${APPKIT_FRAMEWORK})
 set_target_properties(HurricanMapEditor PROPERTIES
-    MACOSX_BUNDLE_BUNDLE_NAME "Hurrican Map Editor"
+    MACOSX_BUNDLE_BUNDLE_NAME "Editor de mapas Hurrican"
     MACOSX_BUNDLE_GUI_IDENTIFIER "org.hurrican.mapeditor"
     MACOSX_BUNDLE_BUNDLE_VERSION "0.1.0"
     MACOSX_BUNDLE_SHORT_VERSION_STRING "0.1.0"
