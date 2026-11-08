@@ -16,7 +16,7 @@ The editor is **not yet at full feature parity** with the Windows tool. It rende
 
 ## Download the first installable build
 
-The **macOS Intel editor** GitHub Action builds on an Intel macOS runner with a macOS 12 deployment target, tests the map-format core, bundles SDL runtime libraries, and uploads a ZIP, DMG, and SHA-256 checksums. Run it with **Actions → macOS Intel editor → Run workflow**, or let a push/PR change under `EditorMac/` trigger it. Download the `HurricanMapEditor-macOS12-Intel` artifact from the completed run. Installation notes and the unsigned/not-notarized warning are in `INSTALLING.md`.
+The **macOS Intel editor** GitHub Action builds an `x86_64` app with a macOS 12 deployment target, builds SDL for that same target, runs the map-format tests natively, bundles SDL runtime libraries, and uploads a ZIP, DMG, and SHA-256 checksums. Run it with **Actions → macOS Intel editor → Run workflow**, or let a push/PR change under `EditorMac/` trigger it. Download the `HurricanMapEditor-macOS12-Intel` artifact from the completed run. Installation notes and the unsigned/not-notarized warning are in `INSTALLING.md`.
 
 ## Build on an Intel Mac
 

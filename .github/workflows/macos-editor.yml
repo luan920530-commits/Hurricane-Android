@@ -17,10 +17,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: macos-editor-${{ github.event.pull_request.head.ref || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-intel-monterey:
     name: Build Intel app for macOS 12+
-    runs-on: macos-13
+    runs-on: macos-15
     timeout-minutes: 30
     steps:
       - name: Check out source
@@ -68,13 +72,24 @@ jobs:
             -DCMAKE_PREFIX_PATH="$SDL_PREFIX" \
             -DCMAKE_OSX_ARCHITECTURES=x86_64 \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 \
-            -DBUILD_TESTING=ON
+            -DBUILD_TESTING=OFF
 
-      - name: Build editor and format tests
+      - name: Build Intel editor
         run: cmake --build build/EditorMac --config Release --parallel
 
+      - name: Configure native map-format tests
+        run: |
+          cmake -S EditorMac -B build/EditorMac-native-tests \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$SDL_PREFIX" \
+            -DCMAKE_OSX_ARCHITECTURES="$(uname -m)" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 \
+            -DBUILD_TESTING=ON
+
       - name: Run map-format tests
-        run: ctest --test-dir build/EditorMac --output-on-failure
+        run: |
+          cmake --build build/EditorMac-native-tests --config Release --target map-format-tests --parallel
+          ctest --test-dir build/EditorMac-native-tests --output-on-failure
 
       - name: Bundle SDL runtime libraries
         run: |
