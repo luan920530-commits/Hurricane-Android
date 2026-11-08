@@ -1,0 +1,125 @@
+name: macOS Intel editor
+
+on:
+  push:
+    branches: [arena/d350f955-hurricane-android]
+    paths:
+      - "EditorMac/**"
+      - ".github/scripts/package_macos_editor.cmake"
+      - ".github/workflows/macos-editor.yml"
+  pull_request:
+    paths:
+      - "EditorMac/**"
+      - ".github/scripts/package_macos_editor.cmake"
+      - ".github/workflows/macos-editor.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-intel-monterey:
+    name: Build Intel app for macOS 12+
+    runs-on: macos-13
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install CMake
+        run: brew install cmake
+
+      - name: Build SDL2 for the Monterey deployment target
+        run: |
+          SDL_PREFIX="$RUNNER_TEMP/sdl2"
+          git clone --depth 1 --branch release-2.30.9 https://github.com/libsdl-org/SDL.git "$RUNNER_TEMP/SDL"
+          cmake -S "$RUNNER_TEMP/SDL" -B "$RUNNER_TEMP/SDL-build" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$SDL_PREFIX" \
+            -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 \
+            -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TEST=OFF -DSDL_TESTS=OFF
+          cmake --build "$RUNNER_TEMP/SDL-build" --config Release --parallel
+          cmake --install "$RUNNER_TEMP/SDL-build" --config Release
+          echo "SDL_PREFIX=$SDL_PREFIX" >> "$GITHUB_ENV"
+
+      - name: Build SDL2_image with native ImageIO support
+        run: |
+          git clone --depth 1 --branch release-2.8.8 https://github.com/libsdl-org/SDL_image.git "$RUNNER_TEMP/SDL_image"
+          cmake -S "$RUNNER_TEMP/SDL_image" -B "$RUNNER_TEMP/SDL_image-build" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$SDL_PREFIX" \
+            -DCMAKE_PREFIX_PATH="$SDL_PREFIX" \
+            -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 \
+            -DBUILD_SHARED_LIBS=ON \
+            -DSDL2IMAGE_INSTALL=ON \
+            -DSDL2IMAGE_SAMPLES=OFF -DSDL2IMAGE_TESTS=OFF \
+            -DSDL2IMAGE_BACKEND_STB=OFF -DSDL2IMAGE_BACKEND_IMAGEIO=ON \
+            -DSDL2IMAGE_AVIF=OFF -DSDL2IMAGE_JXL=OFF -DSDL2IMAGE_SVG=OFF \
+            -DSDL2IMAGE_TIF=OFF -DSDL2IMAGE_WEBP=OFF
+          cmake --build "$RUNNER_TEMP/SDL_image-build" --config Release --parallel
+          cmake --install "$RUNNER_TEMP/SDL_image-build" --config Release
+
+      - name: Configure x86_64 app
+        run: |
+          cmake -S EditorMac -B build/EditorMac \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$SDL_PREFIX" \
+            -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 \
+            -DBUILD_TESTING=ON
+
+      - name: Build editor and format tests
+        run: cmake --build build/EditorMac --config Release --parallel
+
+      - name: Run map-format tests
+        run: ctest --test-dir build/EditorMac --output-on-failure
+
+      - name: Bundle SDL runtime libraries
+        run: |
+          APP_BUNDLE="$GITHUB_WORKSPACE/build/EditorMac/HurricanMapEditor.app"
+          cmake \
+            -DAPP_BUNDLE="$APP_BUNDLE" \
+            -DSEARCH_DIRS="$SDL_PREFIX/lib" \
+            -P .github/scripts/package_macos_editor.cmake
+          LICENSE_DIR="$APP_BUNDLE/Contents/Resources/Licenses"
+          mkdir -p "$LICENSE_DIR"
+          cp "$RUNNER_TEMP/SDL/LICENSE.txt" "$LICENSE_DIR/SDL2-LICENSE.txt"
+          cp "$RUNNER_TEMP/SDL_image/LICENSE.txt" "$LICENSE_DIR/SDL2_image-LICENSE.txt"
+          cp EditorMac/third_party/imgui/LICENSE.txt "$LICENSE_DIR/Dear-ImGui-LICENSE.txt"
+          cp EditorMac/INSTALLING.md "$APP_BUNDLE/Contents/Resources/INSTALLING.txt"
+          codesign --force --deep --sign - "$APP_BUNDLE"
+          codesign --verify --deep --strict "$APP_BUNDLE"
+          APP_EXECUTABLE="$APP_BUNDLE/Contents/MacOS/HurricanMapEditor"
+          echo "App architectures: $(lipo -archs "$APP_EXECUTABLE")"
+          test "$(lipo -archs "$APP_EXECUTABLE")" = "x86_64"
+          vtool -show-build "$APP_EXECUTABLE" | grep -q "minos 12.0"
+          for library in "$APP_BUNDLE"/Contents/Frameworks/*.dylib; do
+            test -f "$library" || continue
+            test "$(lipo -archs "$library")" = "x86_64"
+            vtool -show-build "$library" | grep -q "minos 12.0"
+          done
+
+      - name: Create downloadable ZIP and DMG
+        run: |
+          APP_BUNDLE="$GITHUB_WORKSPACE/build/EditorMac/HurricanMapEditor.app"
+          DIST="$GITHUB_WORKSPACE/dist"
+          mkdir -p "$DIST"
+          /usr/bin/ditto -c -k --sequesterRsrc --keepParent \
+            "$APP_BUNDLE" "$DIST/HurricanMapEditor-macOS12-Intel.zip"
+          STAGING="$RUNNER_TEMP/HurricanMapEditor-dmg"
+          mkdir -p "$STAGING"
+          /usr/bin/ditto "$APP_BUNDLE" "$STAGING/Hurrican Map Editor.app"
+          cp EditorMac/INSTALLING.md "$STAGING/Read Me - Install.txt"
+          hdiutil create -volname "Hurrican Map Editor" -srcfolder "$STAGING" \
+            -ov -format UDZO "$DIST/HurricanMapEditor-macOS12-Intel.dmg"
+          shasum -a 256 "$DIST"/* > "$DIST/SHA256SUMS.txt"
+
+      - name: Upload installable builds
+        uses: actions/upload-artifact@v4
+        with:
+          name: HurricanMapEditor-macOS12-Intel
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30

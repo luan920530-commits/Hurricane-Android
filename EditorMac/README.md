@@ -14,6 +14,10 @@ The new target uses SDL2, OpenGL, and Dear ImGui. It targets Intel Macs running 
 
 The editor is **not yet at full feature parity** with the Windows tool. It renders map tile atlases when it finds the matching game `data/textures` folder, and falls back to schematic colors if those images are unavailable. Sprite previews, specialized inspectors for every trigger, visual background/music asset pickers, dedicated lighting/shadow painting, undo/redo, minimap, and in-editor game testing remain to be ported.
 
+## Download the first installable build
+
+The **macOS Intel editor** GitHub Action builds on an Intel macOS runner with a macOS 12 deployment target, tests the map-format core, bundles SDL runtime libraries, and uploads a ZIP, DMG, and SHA-256 checksums. Run it with **Actions → macOS Intel editor → Run workflow**, or let a push/PR change under `EditorMac/` trigger it. Download the `HurricanMapEditor-macOS12-Intel` artifact from the completed run. Installation notes and the unsigned/not-notarized warning are in `INSTALLING.md`.
+
 ## Build on an Intel Mac
 
 Install CMake and SDL2. Dear ImGui 1.91.9 is vendored with its upstream license in `third_party/imgui`:
