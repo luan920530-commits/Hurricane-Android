@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "description": "Vector sprite sheet rasterizer",
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2"
+  }
+}

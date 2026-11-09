@@ -195,6 +195,10 @@ MenuClass::MenuClass() {
 
     Skills.LoadImage("skills.png", 200, 200, 100, 100, 2, 2);
 
+    // Preload both idle sheets for the single-player selection showcase.
+    CharacterPortraits[0].LoadImage("p1_hurri_idle.png", 350, 320, 70, 80, 5, 4);
+    CharacterPortraits[1].LoadImage("p1_female_hurri_idle.png", 350, 320, 70, 80, 5, 4);
+
     MenuStar.LoadImage("star.png", 5, 5, 5, 5, 1, 1);
     MenuStar.SetRect(0, 0, 5, 5);
 
@@ -910,6 +914,56 @@ void MenuClass::ShowMenu() {
             pMenuFont->DrawTextCenterAlign(320, ypos + OFFSET + (AktuellerPunkt + 2) * 35,
                                            TextArray[TEXT::ONE_PLAYER + AktuellerPunkt], menucolor, 2);
 
+        } break;
+
+        case MENUZUSTAND_CHARACTER: {
+            // Arcade shooter roster: dark steel panels, olive HUD, amber active frame.
+            const D3DCOLOR panel = D3DCOLOR_RGBA(8, 16, 20, 232);
+            const D3DCOLOR panelInset = D3DCOLOR_RGBA(19, 30, 31, 224);
+            const D3DCOLOR brass = D3DCOLOR_RGBA(207, 166, 78, alpha);
+            const D3DCOLOR dimBrass = D3DCOLOR_RGBA(105, 101, 74, alpha / 2);
+            RenderRect(103, 128, 434, 294, D3DCOLOR_RGBA(0, 0, 0, 190));
+            RenderRect(103, 128, 434, 3, brass);
+            RenderRect(103, 419, 434, 3, brass);
+            RenderRect(103, 128, 3, 294, brass);
+            RenderRect(534, 128, 3, 294, brass);
+            RenderRect(110, 136, 420, 32, panelInset);
+            RenderRect(110, 136, 420, 1, D3DCOLOR_RGBA(239, 205, 126, alpha));
+            pMenuFont->DrawTextCenterAlign(320, 139, TextArray[TEXT::CHARACTER_SELECT], menucolor, 2);
+
+            const int cardX[2] = {122, 334};
+            const int previewFrame = static_cast<int>(ScrollPos * 3.0f) % 20;
+            for (int i = 0; i < 2; ++i) {
+                const bool active = (AktuellerPunkt == i);
+                const int x = cardX[i];
+                const D3DCOLOR edge = active ? brass : dimBrass;
+                RenderRect(x, 176, 184, 220, active ? panelInset : panel);
+                RenderRect(x, 176, 184, 2, edge);
+                RenderRect(x, 394, 184, 2, edge);
+                RenderRect(x, 176, 2, 220, edge);
+                RenderRect(x + 182, 176, 2, 220, edge);
+                RenderRect(x + 8, 184, 168, 148, D3DCOLOR_RGBA(5, 10, 12, 192));
+
+                pDefaultFont->DrawText(x + 10, 179, i == 0 ? "01  /  P1" : "02  /  P1",
+                                       active ? 0xFFFFD77A : 0x99D0C09A);
+                DirectGraphics.SetColorKeyMode();
+                CharacterPortraits[i].RenderSpriteScaled(static_cast<float>(x + 27), 187, 130, 139,
+                                                          previewFrame, active ? 0xFFFFFFFF : 0xB8FFFFFF);
+                DirectGraphics.SetAdditiveMode();
+                pMenuFont->DrawTextCenterAlign(x + 92, 338, TextArray[TEXT::CHARACTER_MALE + i],
+                                               active ? 0xFFFFFFFF : 0x99FFFFFF, 2);
+
+                // Three compact arcade status meters; both characters retain identical gameplay stats.
+                for (int meter = 0; meter < 3; ++meter) {
+                    int y = 365 + meter * 8;
+                    RenderRect(x + 38, y, 108, 4, D3DCOLOR_RGBA(38, 47, 42, alpha));
+                    RenderRect(x + 38, y, 82, 4, active ? D3DCOLOR_RGBA(194, 158, 74, alpha)
+                                                        : D3DCOLOR_RGBA(119, 127, 91, alpha / 2));
+                }
+            }
+
+            pMenuFont->DrawTextCenterAlign(110, 270, "<", 0xFFFFD77A, 2);
+            pMenuFont->DrawTextCenterAlign(530, 270, ">", 0xFFFFD77A, 2);
         } break;
 
         case MENUZUSTAND_SELECTSKILL: {
@@ -1985,6 +2039,7 @@ void MenuClass::DoMenu() {
 
                     // Game starten mit Tutorial
                     NUMPLAYERS = 1;
+                    SetSinglePlayerFemale(false);
                     RunningTutorial = true;
                     Skill = SKILL_EASY;
                     //					SoundManager.StopSong(MUSIC::MENU, false);
@@ -2028,14 +2083,50 @@ void MenuClass::DoMenu() {
             // Menu-Punkt ausgewählt ?
             if (selected) {
                 tempNUMPLAYERS = AktuellerPunkt + 1;
-                AktuellerPunkt = 1;
-
-                AktuellerZustand = MENUZUSTAND_SELECTSKILL;
+                SetSinglePlayerFemale(false);
+                if (tempNUMPLAYERS == 1) {
+                    AktuellerPunkt = 0;
+                    AktuellerZustand = MENUZUSTAND_CHARACTER;
+                } else {
+                    AktuellerPunkt = 1;
+                    AktuellerZustand = MENUZUSTAND_SELECTSKILL;
+                }
                 SoundManager.PlayWave(100, 128, 11025, SOUND::CLICK);
 
                 AuswahlPossible = false;
             }
         } break;  // SPIEL VERLASSEN
+
+        // Einzelspieler-Charakter auswählen
+        case MENUZUSTAND_CHARACTER: {
+            if (AktuellerPunkt < 0)
+                AktuellerPunkt = 1;
+            if (AktuellerPunkt > 1)
+                AktuellerPunkt = 0;
+
+            if (AuswahlPossible && (KeyDown(DIK_LEFT) || KeyDown(DIK_RIGHT) || KeyDown(DIK_NUMPAD4) ||
+                                   KeyDown(DIK_NUMPAD6) || joy_left || joy_right)) {
+                AktuellerPunkt = 1 - AktuellerPunkt;
+                AuswahlPossible = false;
+                input_counter = 0.0f;
+                SoundManager.PlayWave(100, 128, 11025, SOUND::CLICK);
+            }
+
+            if (((!CommandLineParams.Arcade && KeyDown(DIK_ESCAPE)) || joy_escape) && AuswahlPossible == true) {
+                input_counter = 0.0f;
+                AuswahlPossible = false;
+                AktuellerZustand = MENUZUSTAND_PLAYERCOUNT;
+                AktuellerPunkt = 0;
+            }
+
+            if (selected) {
+                SetSinglePlayerFemale(AktuellerPunkt == 1);
+                AktuellerPunkt = 1;
+                AktuellerZustand = MENUZUSTAND_SELECTSKILL;
+                AuswahlPossible = false;
+                SoundManager.PlayWave(100, 128, 11025, SOUND::CLICK);
+            }
+        } break;
 
         // Skill auswählen
         case MENUZUSTAND_SELECTSKILL: {
@@ -2049,8 +2140,13 @@ void MenuClass::DoMenu() {
             if (((!CommandLineParams.Arcade && KeyDown(DIK_ESCAPE)) || joy_escape) && AuswahlPossible == true) {
                 input_counter = 0.0f;
                 AuswahlPossible = false;
-                AktuellerZustand = MENUZUSTAND_PLAYERCOUNT;
-                AktuellerPunkt = tempNUMPLAYERS - 1;
+                if (tempNUMPLAYERS == 1) {
+                    AktuellerZustand = MENUZUSTAND_CHARACTER;
+                    AktuellerPunkt = SinglePlayerFemale ? 1 : 0;
+                } else {
+                    AktuellerZustand = MENUZUSTAND_PLAYERCOUNT;
+                    AktuellerPunkt = tempNUMPLAYERS - 1;
+                }
             }
 
             // Menu-Punkt ausgewählt ?
@@ -2108,6 +2204,7 @@ void MenuClass::DoMenu() {
                     // DKS - But I have reversed it here, because InitNewGame() depended on
                     //      NUMPLAYERS being set correctly.
                     NUMPLAYERS = Savegames[AktuellerPunkt].Players;
+                    SetSinglePlayerFemale(false);
                     InitNewGame();
 
                     // Werte von Spieler auf das Savegame übertragen

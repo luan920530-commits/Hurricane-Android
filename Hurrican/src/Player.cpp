@@ -43,6 +43,14 @@
 extern bool DEMORecording;
 extern bool DEMOPlaying;
 
+bool SinglePlayerFemale = false;
+
+void SetSinglePlayerFemale(bool selected) {
+    if (SinglePlayerFemale != selected)
+        Player[0].SpritesLoaded = false;
+    SinglePlayerFemale = selected;
+}
+
 int Stage;     // Aktuelles Level
 int NewStage;  // Neues Level
 int Skill;     // 0 = easy, 1 = medium, 2 = hard, 3 = Hurrican
@@ -4315,6 +4323,8 @@ void PlayerClass::LoadSprites() {
 
     if (PlayerNumber == 1)
         prefix = "p2_";
+    else if (SinglePlayerFemale && NUMPLAYERS == 1)
+        prefix = "p1_female_";
     else
         prefix = "p1_";
 

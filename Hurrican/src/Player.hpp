@@ -303,6 +303,8 @@ class PlayerClass {
 // DKS - PlayerClass array is now static, not dynamically-allocated:
 // extern PlayerClass			*pPlayer[2];
 extern PlayerClass Player[2];
+extern bool SinglePlayerFemale;
+void SetSinglePlayerFemale(bool selected);
 
 extern int Stage;     // Aktuelles Level
 extern int NewStage;  // Neues Level
