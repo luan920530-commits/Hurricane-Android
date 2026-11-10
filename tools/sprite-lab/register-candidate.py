@@ -63,12 +63,38 @@ def main():
         registered = tmp / 'registered.png'
         cv2.imwrite(str(registered), aligned)
         out = ROOT / 'sheets' / 'run-study' / 'candidates' / f'{op}-phase08-70x80.png'
-        out.parent.mkdir(parents=True, exist_ok=True)
+        candidate = tmp / 'candidate.png'
+        scaled = tmp / 'scaled.png'
         run('convert', str(registered), '-alpha', 'set', '-fuzz', '4%', '-fill', 'none', '-draw',
-            'matte 0,0 floodfill', '-trim', '+repage', '-resize', f'{scale:.8f}%', '-gravity', 'south',
-            '-background', 'none', '-extent', '70x80', str(out))
-        print(f'{op}: {int(inliers.sum())}/{len(good)} torso matches; wrote {out}')
-        print('Study only: inspect anatomy, position and canvas borders before using.')
+            'matte 0,0 floodfill', '-trim', '+repage', '-resize', f'{scale:.8f}%', str(scaled))
+        width, height = map(int, run('identify', '-format', '%w %h', str(scaled)).split())
+        if width > 70 or height > 80:
+            raise ValueError(f'Scaled candidate is {width}x{height}; fitting it would crop the art')
+        run('convert', str(scaled), '-gravity', 'south', '-background', 'none', '-extent', '70x80', str(candidate))
+        # Place the torso alongside the registered run-03 cell using the same
+        # alpha-centroid anchor. Keep a two-pixel bottom safety margin; do not
+        # silently crop if a translation goes out of bounds.
+        image = cv2.imread(str(candidate), cv2.IMREAD_UNCHANGED)
+        target = cv2.imread(str(ROOT / 'sheets' / 'run-study' / 'aligned-4frame' / f'{op}-run-03.png'), cv2.IMREAD_UNCHANGED)
+        if image is None or target is None or image.shape != (80, 70, 4) or target.shape != (80, 70, 4):
+            raise ValueError('Expected RGBA 70x80 candidate and registered reference')
+        def center_x(frame):
+            weights = frame[6:55, 8:50, 3].astype(np.float64)
+            if not weights.sum():
+                raise ValueError('Empty torso anchor')
+            return float((weights * np.arange(8, 50)[None, :]).sum() / weights.sum())
+        dx = int(round(center_x(target) - center_x(image)))
+        ys, xs = np.where(image[:, :, 3] > 8)
+        dy = min(0, 77 - int(ys.max()))
+        if xs.min() + dx < 0 or xs.max() + dx >= 70 or ys.min() + dy < 0:
+            raise ValueError('Registration would clip the candidate cell')
+        image = cv2.warpAffine(image, np.float32([[1, 0, dx], [0, 1, dy]]), (70, 80),
+                               flags=cv2.INTER_NEAREST, borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0, 0))
+        out.parent.mkdir(parents=True, exist_ok=True)
+        if not cv2.imwrite(str(out), image):
+            raise ValueError(f'Could not write {out}')
+        print(f'{op}: {int(inliers.sum())}/{len(good)} torso matches, cell shift ({dx},{dy}); wrote {out}')
+        print('Study only: inspect anatomy and continuity before using.')
 
 
 if __name__ == '__main__':

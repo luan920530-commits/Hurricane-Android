@@ -3140,17 +3140,6 @@ select { min-width: 0; max-width: 100%; }
       await loadFile(new File([blob], `${operator}-operator.png`, {type:"image/png"}));
     } catch (error) { console.error("Could not preload concept", error); }
   })();
-  // Arena sprite-lab convenience: load the selected reviewed concept without a local file picker.
-  (async () => {
-    const operator = new URLSearchParams(location.search).get("operator");
-    if (!["male", "female"].includes(operator)) return;
-    try {
-      const response = await fetch(`uploads/${operator}-operator.png`);
-      if (!response.ok) throw new Error("concept file not found");
-      const blob = await response.blob();
-      await loadFile(new File([blob], `${operator}-operator.png`, {type:"image/png"}));
-    } catch (error) { console.error("Could not preload concept", error); }
-  })();
 
   // ---------- Project: start over, versions in this browser, project files ----------
   const setProjectNote = m => { $("projectNote").textContent = m; };
