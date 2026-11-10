@@ -77,7 +77,10 @@ def main() -> None:
     if convert:
         for operator in ("male", "female"):
             cells = [str(OUT / f"{operator}-run-{i:02d}.png") for i in range(1, 5)]
-            subprocess.run([convert, "-delay", "11", *cells, "-loop", "0", str(OUT / f"{operator}-run-preview.gif")], check=True)
+            # Clear each frame before drawing the next: otherwise transparent pixels
+            # can leave previous limbs visible in GIF players (disposal Undefined).
+            subprocess.run([convert, "-dispose", "background", "-delay", "11", *cells,
+                            "-loop", "0", str(OUT / f"{operator}-run-preview.gif")], check=True)
 
 
 if __name__ == "__main__":

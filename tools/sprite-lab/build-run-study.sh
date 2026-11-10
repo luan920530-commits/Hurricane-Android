@@ -42,8 +42,9 @@ for operator in male female; do
     "${cells[1]}" -geometry +70+0 -compose over -composite \
     "${cells[2]}" -geometry +140+0 -compose over -composite \
     "${cells[3]}" -geometry +210+0 -compose over -composite "$OUT/$operator-run-4f-70x80.png"
-  convert "${cells[0]}" "${cells[1]}" "${cells[2]}" "${cells[3]}" \
-    -delay 11 -loop 0 "$OUT/$operator-run-preview.gif"
+  # Set delay/disposal before inputs so every frame gets both properties.
+  convert -dispose background -delay 11 "${cells[0]}" "${cells[1]}" "${cells[2]}" "${cells[3]}" \
+    -loop 0 "$OUT/$operator-run-preview.gif"
 done
 
 # Register each pose to a shared upper-body anchor; leave vertical run bounce intact.
