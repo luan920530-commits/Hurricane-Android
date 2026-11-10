@@ -1,0 +1,191 @@
+{
+  "frames": {
+    "woman_jump_0": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 287,
+        "h": 327
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 287,
+        "h": 327
+      },
+      "sourceSize": {
+        "w": 287,
+        "h": 327
+      },
+      "duration": 83
+    },
+    "woman_jump_1": {
+      "frame": {
+        "x": 287,
+        "y": 0,
+        "w": 287,
+        "h": 327
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 287,
+        "h": 327
+      },
+      "sourceSize": {
+        "w": 287,
+        "h": 327
+      },
+      "duration": 83
+    },
+    "woman_jump_2": {
+      "frame": {
+        "x": 574,
+        "y": 0,
+        "w": 287,
+        "h": 327
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 287,
+        "h": 327
+      },
+      "sourceSize": {
+        "w": 287,
+        "h": 327
+      },
+      "duration": 83
+    },
+    "woman_jump_3": {
+      "frame": {
+        "x": 861,
+        "y": 0,
+        "w": 287,
+        "h": 327
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 287,
+        "h": 327
+      },
+      "sourceSize": {
+        "w": 287,
+        "h": 327
+      },
+      "duration": 83
+    },
+    "woman_jump_4": {
+      "frame": {
+        "x": 1148,
+        "y": 0,
+        "w": 287,
+        "h": 327
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 287,
+        "h": 327
+      },
+      "sourceSize": {
+        "w": 287,
+        "h": 327
+      },
+      "duration": 83
+    },
+    "woman_jump_5": {
+      "frame": {
+        "x": 1435,
+        "y": 0,
+        "w": 287,
+        "h": 327
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 287,
+        "h": 327
+      },
+      "sourceSize": {
+        "w": 287,
+        "h": 327
+      },
+      "duration": 83
+    },
+    "woman_jump_6": {
+      "frame": {
+        "x": 1722,
+        "y": 0,
+        "w": 287,
+        "h": 327
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 287,
+        "h": 327
+      },
+      "sourceSize": {
+        "w": 287,
+        "h": 327
+      },
+      "duration": 83
+    },
+    "woman_jump_7": {
+      "frame": {
+        "x": 2009,
+        "y": 0,
+        "w": 287,
+        "h": 327
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 287,
+        "h": 327
+      },
+      "sourceSize": {
+        "w": 287,
+        "h": 327
+      },
+      "duration": 83
+    }
+  },
+  "meta": {
+    "app": "vex",
+    "version": "0.1.0",
+    "image": "woman_jump@2x.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 2296,
+      "h": 327
+    },
+    "scale": "4",
+    "frameTags": [
+      {
+        "name": "woman_jump",
+        "from": 0,
+        "to": 7,
+        "direction": "forward"
+      }
+    ]
+  }
+}

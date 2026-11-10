@@ -1,0 +1,107 @@
+{
+  "frames": {
+    "woman_crouch_0": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 287,
+        "h": 327
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 287,
+        "h": 327
+      },
+      "sourceSize": {
+        "w": 287,
+        "h": 327
+      },
+      "duration": 167
+    },
+    "woman_crouch_1": {
+      "frame": {
+        "x": 287,
+        "y": 0,
+        "w": 287,
+        "h": 327
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 287,
+        "h": 327
+      },
+      "sourceSize": {
+        "w": 287,
+        "h": 327
+      },
+      "duration": 167
+    },
+    "woman_crouch_2": {
+      "frame": {
+        "x": 574,
+        "y": 0,
+        "w": 287,
+        "h": 327
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 287,
+        "h": 327
+      },
+      "sourceSize": {
+        "w": 287,
+        "h": 327
+      },
+      "duration": 167
+    },
+    "woman_crouch_3": {
+      "frame": {
+        "x": 861,
+        "y": 0,
+        "w": 287,
+        "h": 327
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 287,
+        "h": 327
+      },
+      "sourceSize": {
+        "w": 287,
+        "h": 327
+      },
+      "duration": 167
+    }
+  },
+  "meta": {
+    "app": "vex",
+    "version": "0.1.0",
+    "image": "woman_crouch@2x.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 1148,
+      "h": 327
+    },
+    "scale": "4",
+    "frameTags": [
+      {
+        "name": "woman_crouch",
+        "from": 0,
+        "to": 3,
+        "direction": "forward"
+      }
+    ]
+  }
+}
