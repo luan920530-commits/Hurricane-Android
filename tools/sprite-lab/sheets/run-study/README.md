@@ -7,7 +7,9 @@
 - Key pose 2 was replaced after review. It now shows two legs and two boots, without the duplicated limb from the earlier draft.
 - `cells/` retains the common-scale but not yet registered intermediate cells.
 - `../frames/` contains the larger generated key poses. The poses were generated individually from the selected operator concepts; alignment does not invent or interpolate leg poses.
-- This is still an animation study: four distinct poses are not the runtime's required 20-frame (`5×4`) run sheet, and the sheets remain outside `Hurrican/data/textures`.
+- This is still an animation study: four poses are not the runtime's required 20-frame (`5×4`) run sheet. At least 16 slots per character still need new or deliberately constructed, individually reviewed poses; no missing slots have been filled by silently repeating frames. The sheets remain outside `Hurrican/data/textures`.
+- `../../frames/{male,female}/candidate-crossing.png` are additional experimental passing poses only. They each appear to have two boots, but the legs overlap, and the female design differs from the other poses; neither has been registered into the animation or approved as a matching original frame. Visual anatomy and continuity review is still necessary, including at 70×80.
+- Automated preview checks: `python3 tools/sprite-lab/check-run-previews.py` (requires ImageMagick, OpenCV and NumPy). These checks can detect leftover GIF alpha but cannot prove that a drawing has anatomically correct legs.
 
 Rebuild from the repository root:
 
