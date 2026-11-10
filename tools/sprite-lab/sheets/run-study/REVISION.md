@@ -23,4 +23,13 @@ python3 tools/sprite-lab/review-server.py
 # Abrir http://localhost:8000/
 ```
 
-**No se han reemplazado texturas activas.** Para una prueba real en el motor primero hacen falta cuadros adicionales y corregidos, transparencia y bordes revisados, una hoja 5×4 en orden, y validación del comportamiento en ejecución. No se rellenan artificialmente 20 huecos con copias para aparentar una animación completa.
+## Preparación para la hoja de prueba
+
+`tools/sprite-lab/pack-reviewed-run.py` prepara una hoja solo cuando se aportan 20 PNG transparentes de 70×80, nombrados `frame-00.png` a `frame-19.png` en orden del juego. Comprueba dimensiones, transparencia, duplicados exactos y advierte sobre píxeles visibles en los bordes. No valida anatomía ni movimiento. Con OpenCV y NumPy instalados:
+
+```sh
+python3 tools/sprite-lab/pack-reviewed-run.py /ruta/a/cuadros female
+python3 tools/sprite-lab/test-pack-reviewed-run.py
+```
+
+La hoja queda aislada en `sheets/run-study/exports/`; el script nunca la instala en el juego. **No se han reemplazado texturas activas.** Para una prueba real en el motor primero hacen falta cuadros adicionales y corregidos, transparencia y bordes revisados, una hoja 5×4 en orden, y validación del comportamiento en ejecución. No se rellenan artificialmente 20 huecos con copias para aparentar una animación completa.
