@@ -28,6 +28,7 @@ class ReviewHandler(SimpleHTTPRequestHandler):
             for operator in ('male', 'female'):
                 allowed.add(f'/tools/sprite-lab/sheets/run-study/{operator}-run-4f-70x80.png')
                 allowed.add(f'/tools/sprite-lab/sheets/run-study/candidates/{operator}-recovery-70x80.png')
+                allowed.add(f'/tools/sprite-lab/sheets/run-study/candidates/{operator}-phase08-70x80.png')
             if self.path not in allowed:
                 self.send_error(404)
                 return
