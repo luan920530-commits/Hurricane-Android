@@ -1,12 +1,19 @@
 # Run-cycle pose study
 
-- `male-run-4f-70x80.png` and `female-run-4f-70x80.png` are transparent 4-frame horizontal strips; each cell is exactly 70×80 px.
-- `cells/` keeps the four individual processed frames. `../frames/` contains the larger generated source key poses.
-- `*-run-preview.gif` is a quick loop for visual review, not an in-game asset.
-- The walk/run poses were generated individually from the selected operator concepts and are not bone-rigged in-betweens. Their identity, edges, frame-to-frame consistency, and ground line need visual review. The strips are an animation study, **not yet the game's 5×4 run texture** and are not installed in `Hurrican/data/textures`.
+- `male-run-4f-70x80.png` and `female-run-4f-70x80.png` are transparent 4-frame horizontal strips; each cell is exactly 70×80 px. They are the aligned review versions.
+- `*-run-preview.gif` is the corresponding short loop for visual review, not an in-game asset.
+- `cells/` retains the raw fitted poses. `aligned-4frame/` contains the registered cells, strips, GIFs, and `alignment.json` with per-frame horizontal offsets. Alignment holds the upper-body anchor steady while retaining vertical run bounce.
+- `../frames/` contains the larger generated key poses. The poses were generated individually from the selected operator concepts; alignment does not invent or interpolate leg poses.
+- This is still an animation study: four distinct poses are not the runtime's required 20-frame (`5×4`) run sheet, and the sheets remain outside `Hurrican/data/textures`.
 
-Rebuild with ImageMagick 6+:
+Rebuild from the repository root:
 
 ```sh
 bash tools/sprite-lab/build-run-study.sh
+```
+
+ImageMagick 6+ is required. The optional registration pass uses OpenCV and NumPy:
+
+```sh
+python3 -m pip install -r tools/sprite-lab/requirements-run-study.txt
 ```

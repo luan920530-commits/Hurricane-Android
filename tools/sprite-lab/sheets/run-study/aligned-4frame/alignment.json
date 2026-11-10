@@ -1,0 +1,61 @@
+{
+  "cell": [
+    70,
+    80
+  ],
+  "alignment": "integer horizontal translation by alpha centroid in x=8..49,y=6..54; y preserved for run bounce",
+  "operators": {
+    "male": {
+      "anchor_centers_before": [
+        [
+          32.1,
+          30.23
+        ],
+        [
+          32.08,
+          31.83
+        ],
+        [
+          32.24,
+          29.98
+        ],
+        [
+          31.26,
+          30.57
+        ]
+      ],
+      "x_offsets_px": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    "female": {
+      "anchor_centers_before": [
+        [
+          25.14,
+          32.78
+        ],
+        [
+          22.53,
+          31.52
+        ],
+        [
+          32.2,
+          30.17
+        ],
+        [
+          28.1,
+          29.92
+        ]
+      ],
+      "x_offsets_px": [
+        6,
+        9,
+        -1,
+        3
+      ]
+    }
+  }
+}

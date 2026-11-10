@@ -13,7 +13,7 @@ A free, local rigging workbench is available in the live preview and preserved i
 - `painted/*-transparent.png` — dark backdrop removed; transparent PNG working copies.
 - `painted/*-70x80.png` — static, aspect-preserving previews fitted inside a 70×80 game cell.
 - `frames/{male,female}/run-0*.png` — four larger generated run-cycle key poses for each operator.
-- `sheets/run-study/*-run-4f-70x80.png` — transparent 4-frame horizontal run strips; preview GIFs and individual fitted cells are alongside them. Rebuild with `bash tools/sprite-lab/build-run-study.sh`.
+- `sheets/run-study/*-run-4f-70x80.png` — transparent 4-frame horizontal run strips, registered to a shared upper-body anchor to reduce lateral jitter; preview GIFs are alongside them. Individual aligned cells and measured offsets are in `sheets/run-study/aligned-4frame/`. Rebuild with `bash tools/sprite-lab/build-run-study.sh` (ImageMagick plus the optional packages in `requirements-run-study.txt`).
 
 The male and female concepts have different source proportions and poses. Keep their hand-to-rifle contact and silhouette coherent during rigging; avoid treating simple repeated frames or crude rotations as finished animation.
 

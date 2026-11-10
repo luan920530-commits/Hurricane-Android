@@ -30,19 +30,16 @@ for operator in male female; do
     -set delay 11 -loop 0 "$OUT/$operator-run-preview.gif"
 done
 
-cat > "$OUT/README.md" <<'EOF'
-# Run-cycle pose study
+# Register each pose to a common upper-body anchor. If optional Python deps are
+# unavailable, retain the raw fit and tell the artist how to run the alignment.
+if python3 -c 'import cv2, numpy' >/dev/null 2>&1; then
+  PYTHONPATH="${PYTHONPATH:-}" python3 "$ROOT/align-run-study.py"
+  for operator in male female; do
+    cp "$OUT/aligned-4frame/$operator-run-4f-70x80.png" "$OUT/$operator-run-4f-70x80.png"
+    cp "$OUT/aligned-4frame/$operator-run-preview.gif" "$OUT/$operator-run-preview.gif"
+  done
+else
+  echo "Optional alignment skipped. Install: pip install -r $ROOT/requirements-run-study.txt" >&2
+fi
 
-- `male-run-4f-70x80.png` and `female-run-4f-70x80.png` are transparent 4-frame horizontal strips; each cell is exactly 70×80 px.
-- `cells/` keeps the four individual processed frames. `../frames/` contains the larger generated source key poses.
-- `*-run-preview.gif` is a quick loop for visual review, not an in-game asset.
-- The walk/run poses were generated individually from the selected operator concepts and are not bone-rigged in-betweens. Their identity, edges, frame-to-frame consistency, and ground line need visual review. The strips are an animation study, **not yet the game's 5×4 run texture** and are not installed in `Hurrican/data/textures`.
-
-Rebuild with ImageMagick 6+:
-
-```sh
-bash tools/sprite-lab/build-run-study.sh
-```
-EOF
-
-echo "Wrote transparent 4-frame strips under $OUT"
+echo "Wrote aligned transparent 4-frame strips under $OUT"
