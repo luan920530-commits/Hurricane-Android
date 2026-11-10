@@ -1,5 +1,7 @@
 # Run-cycle pose study
 
+See [REVISION.md](REVISION.md) for the frame-by-frame scope, identified issues and instructions for the interactive in-context review at `tools/sprite-lab/review.html`. This review is not a running game or a completed integration.
+
 - `male-run-4f-70x80.png` and `female-run-4f-70x80.png` are transparent 4-frame horizontal strips; each cell is exactly 70×80 px. They are the aligned review versions.
 - `*-run-preview.gif` is the corresponding short loop for visual review, not an in-game asset. Each frame clears to the transparent background before the next frame, preventing leftover silhouettes.
 - `original-run-reference.gif` shows all 20 frames from the original `Hurrican/data/textures/p1_hurri_laufen.png` in row-major order, at a constant illustrative 60 ms per frame (not a measurement of runtime speed). The original has wide-stride poses around indices 0/10, a passing pose around 5/15, and intermediate positions between them. The four operator poses are not a frame-for-frame recreation of that sequence; additional individually reviewed drawings are still needed.
