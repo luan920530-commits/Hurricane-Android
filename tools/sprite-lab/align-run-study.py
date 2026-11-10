@@ -32,7 +32,12 @@ def anchor_center(frame: np.ndarray) -> tuple[float, float]:
 
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
-    report = {"cell": [70, 80], "alignment": "integer horizontal translation by alpha centroid in x=8..49,y=6..54; y preserved for run bounce", "operators": {}}
+    report = {
+        "cell": [70, 80],
+        "scale_normalization": "all four key poses use the same per-character scale, computed from the maximum trimmed width/height before fitting; prevents pose-dependent zoom",
+        "alignment": "integer horizontal translation by alpha centroid in x=8..49,y=6..54; y preserved for run bounce",
+        "operators": {},
+    }
     for operator in ("male", "female"):
         frames = []
         for i in range(1, 5):
