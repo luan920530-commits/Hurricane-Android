@@ -107,6 +107,9 @@ jobs:
             fi
           done
 
+      - name: Validar controles tácticos metálicos
+        run: python3 tools/touch-ui/test-icons.py
+
       # Comprueba también los includes de un fallo que, si no, solo aparece tras compilar:
       # un fichero que existe en local pero se quedó fuera del repositorio por .gitignore.
       - name: Comprobar que todos los #include apuntan a ficheros del repositorio

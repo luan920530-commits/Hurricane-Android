@@ -78,8 +78,9 @@ const ActionDef ACTIONS[] = {
 
 constexpr int ACTION_COUNT = sizeof(ACTIONS) / sizeof(ACTIONS[0]);
 
-// Iconos Lucide (ISC/MIT): fuentes y licencias en tools/touch-ui/lucide.
-// Los iconos anteriores se conservan en data/textures; el fallback vectorial sigue activo.
+// Iconos Game-icons.net (CC BY 3.0), excepto depuracion (Lucide ISC/MIT).
+// Atribuciones y modificaciones: data/licenses/GameIcons-NOTICE.txt.
+// Los iconos anteriores y el fallback vectorial permanecen disponibles.
 struct ActionIconDef {
     const char *filename;
     uint16_t texture_w, texture_h;
@@ -88,18 +89,20 @@ struct ActionIconDef {
 };
 
 const ActionIconDef ACTION_ICONS[ACTION_COUNT] = {
-    {"touch_lucide_jump.png", 128, 128, 128, 128, 1, 1},       // salto
-    {"touch_lucide_fire.png", 128, 128, 128, 128, 1, 1},       // disparo
-    {"touch_lucide_blitz.png", 128, 128, 128, 128, 1, 1},      // blitz
-    {"touch_lucide_powerline.png", 128, 128, 128, 128, 1, 1},  // powerline
-    {"touch_lucide_grenade.png", 128, 128, 128, 128, 1, 1},    // granada
-    {"touch_lucide_smartbomb.png", 128, 128, 128, 128, 1, 1},  // bomba inteligente
-    {"touch_lucide_weapon.png", 128, 128, 128, 128, 1, 1},     // cambiar arma
-    {"touch_lucide_pause.png", 128, 128, 128, 128, 1, 1},      // pausa
-    {"touch_lucide_debug.png", 128, 128, 128, 128, 1, 1},      // depuracion
+    {"touch_tactical_jump.png", 128, 128, 128, 128, 1, 1},       // salto
+    {"touch_tactical_fire.png", 128, 128, 128, 128, 1, 1},       // disparo
+    {"touch_tactical_blitz.png", 128, 128, 128, 128, 1, 1},      // blitz
+    {"touch_tactical_powerline.png", 128, 128, 128, 128, 1, 1},  // powerline
+    {"touch_tactical_grenade.png", 128, 128, 128, 128, 1, 1},    // granada
+    {"touch_tactical_smartbomb.png", 128, 128, 128, 128, 1, 1},  // bomba inteligente
+    {"touch_tactical_weapon.png", 128, 128, 128, 128, 1, 1},     // cambiar arma
+    {"touch_tactical_pause.png", 128, 128, 128, 128, 1, 1},      // pausa
+    {"touch_tactical_debug.png", 128, 128, 128, 128, 1, 1},      // depuracion
 };
 
 DirectGraphicsSprite g_action_icons[ACTION_COUNT];
+DirectGraphicsSprite g_tactical_shell;
+bool g_tactical_shell_loaded = false;
 bool g_action_icons_loaded[ACTION_COUNT] = {};
 
 /// Radio del joystick, como fraccion de la altura de la pantalla.
@@ -135,16 +138,25 @@ void DrawDpad(TouchControlsClass &controls, float cx, float cy, float radius, co
     const float dy[] = {0.0f, 0.0f, -offset, offset};
 
     controls.DrawDisc(cx, cy + radius * 0.05f, radius * 1.04f, radius * 1.04f, 0x48000000);
-    controls.DrawDisc(cx, cy, radius, radius, COLOR_RIM);
-    controls.DrawDisc(cx, cy, radius * 0.94f, radius * 0.94f, COLOR_STICK_BASE);
+    if (g_tactical_shell_loaded) {
+        const int diameter = static_cast<int>(radius * 2.0f);
+        g_tactical_shell.RenderSpriteScaled(cx - radius, cy - radius, diameter, diameter, 0xFFFFFFFF);
+    } else {
+        controls.DrawDisc(cx, cy, radius, radius, COLOR_RIM);
+        controls.DrawDisc(cx, cy, radius * 0.94f, radius * 0.94f, COLOR_STICK_BASE);
+    }
 
     for (int i = 0; i < 4; ++i) {
         const float bx = cx + dx[i];
         const float by = cy + dy[i];
-        controls.DrawDisc(bx, by, button_r * 1.10f, button_r * 1.10f, 0x50000000);
-        controls.DrawDisc(bx, by, button_r, button_r, COLOR_RIM);
-        controls.DrawDisc(bx, by, button_r * 0.84f, button_r * 0.84f,
-                 pressed[i] ? COLOR_PRESSED : COLOR_BASE);
+        if (!g_tactical_shell_loaded) {
+            controls.DrawDisc(bx, by, button_r * 1.10f, button_r * 1.10f, 0x50000000);
+            controls.DrawDisc(bx, by, button_r, button_r, COLOR_RIM);
+            controls.DrawDisc(bx, by, button_r * 0.84f, button_r * 0.84f,
+                     pressed[i] ? COLOR_PRESSED : COLOR_BASE);
+        } else if (pressed[i]) {
+            controls.DrawDisc(bx, by, button_r * 0.65f, button_r * 0.65f, 0x70F0C070);
+        }
 
         const float a = button_r * 0.22f;
         switch (i) {
@@ -167,8 +179,10 @@ void DrawDpad(TouchControlsClass &controls, float cx, float cy, float radius, co
         }
     }
 
-    controls.DrawDisc(cx, cy, radius * 0.31f, radius * 0.31f, COLOR_RIM);
-    controls.DrawDisc(cx, cy, radius * 0.24f, radius * 0.24f, COLOR_STICK_KNOB);
+    if (!g_tactical_shell_loaded) {
+        controls.DrawDisc(cx, cy, radius * 0.31f, radius * 0.31f, COLOR_RIM);
+        controls.DrawDisc(cx, cy, radius * 0.24f, radius * 0.24f, COLOR_STICK_KNOB);
+    }
 }
 
 void DrawActionIcon(TouchControlsClass &controls, int action, float cx, float cy, float radius, std::uint32_t color) {
@@ -268,6 +282,7 @@ void TouchControlsClass::Init() {
     // Android puede registrar el touchscreen al primer evento tactil. Mantener el overlay
     // habilitado desde el arranque evita que el estado inicial de SDL oculte el mando.
     available = true;
+    g_tactical_shell_loaded = g_tactical_shell.LoadImage("touch_tactical_shell.png", 256, 256, 256, 256, 1, 1);
 
     for (int i = 0; i < ACTION_COUNT; i++) {
         actions[i].x = ACTIONS[i].x;
@@ -717,13 +732,19 @@ void TouchControlsClass::DrawGeometry(const SDL_Rect &screen_rect) {
                                        : (actions[i].pressed ? COLOR_PRESSED : COLOR_BASE);
 
         DrawDisc(cx, cy + r * 0.08f, r * 1.10f, r * 1.10f, 0x48000000);
-        DrawDisc(cx, cy, r * 1.04f, r * 1.04f,
-                 actions[i].is_toggle ? COLOR_DEBUG_RIM : COLOR_RIM);
-        DrawDisc(cx, cy, r * 0.92f, r * 0.92f, fill);
+        if (g_tactical_shell_loaded) {
+            const int diameter = static_cast<int>(r * 2.0f);
+            const std::uint32_t shell_tint = actions[i].pressed ? 0xFFFFDB8A : 0xFFFFFFFF;
+            g_tactical_shell.RenderSpriteScaled(cx - r, cy - r, diameter, diameter, shell_tint);
+        } else {
+            DrawDisc(cx, cy, r * 1.04f, r * 1.04f,
+                     actions[i].is_toggle ? COLOR_DEBUG_RIM : COLOR_RIM);
+            DrawDisc(cx, cy, r * 0.92f, r * 0.92f, fill);
+        }
 
         if (g_action_icons_loaded[i]) {
             const ActionIconDef &icon = ACTION_ICONS[i];
-            const float icon_w = r * 1.42f;
+            const float icon_w = r * (g_tactical_shell_loaded ? 1.08f : 1.42f);
             const float icon_h = icon_w * static_cast<float>(icon.frame_h) / icon.frame_w;
             const std::uint32_t tint = actions[i].pressed ? 0xFFFFE2A0 : 0xFFFFFFFF;
             g_action_icons[i].RenderSpriteScaled(static_cast<int>(cx - icon_w * 0.5f),
