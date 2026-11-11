@@ -54,7 +54,7 @@ namespace {
 /// tactiles a los recursos v2 y la version 6 incorpora las hojas vectoriales del personaje
 /// femenino. La version 7 incorpora los iconos tactiles Lucide; cada cambio fuerza a las
 /// instalaciones existentes a recopiarlos.
-constexpr const char *ANDROID_ASSET_VERSION = "8";
+constexpr const char *ANDROID_ASSET_VERSION = "9";
 
 constexpr const char *LOG_TAG = "Hurrican";
 

@@ -16,7 +16,7 @@ class IconTests(unittest.TestCase):
         storage = (ROOT / 'Hurrican' / 'src' / 'SDLPort' / 'AndroidPort.cpp').read_text()
         match = re.search(r'ANDROID_ASSET_VERSION\s*=\s*"(\d+)"', storage)
         self.assertIsNotNone(match)
-        self.assertGreaterEqual(int(match.group(1)), 8)
+        self.assertGreaterEqual(int(match.group(1)), 9)
 
     def test_shell_and_attribution(self):
         data = (TEXTURES / 'touch_tactical_shell.png').read_bytes()

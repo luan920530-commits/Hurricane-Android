@@ -37,8 +37,13 @@
 #include "Player.hpp"
 #if defined(ANDROID)
 #  include "SDLPort/TouchControls.hpp"
+#  include "SDLPort/Store.hpp"
 #endif
 #include "Timer.hpp"
+
+#if defined(ANDROID)
+static std::string StoreMessage;
+#endif
 
 // Farben für die Highscore erstellen, in der die Namen aufblinken
 const std::array<D3DCOLOR, MAX_COLORS> HighscoreColors = {
@@ -368,10 +373,43 @@ void MenuClass::ShowMenu() {
                                                        TextArray[TEXT::MENUE_SPIEL_STARTEN + i], menucolor2, 2);
                 }
 
-            pMenuFont->DrawTextCenterAlign(320, ypos + OFFSET + AktuellerPunkt * 35,
-                                           TextArray[TEXT::MENUE_SPIEL_STARTEN + AktuellerPunkt], menucolor, 2);
+#if defined(ANDROID)
+            pMenuFont->DrawTextCenterAlign(320, ypos + OFFSET + 6 * 35, "TIENDA",
+                                           AktuellerPunkt == 6 ? menucolor : menucolor2, 2);
+            if (AktuellerPunkt < 6)
+#endif
+                pMenuFont->DrawTextCenterAlign(320, ypos + OFFSET + AktuellerPunkt * 35,
+                                               TextArray[TEXT::MENUE_SPIEL_STARTEN + AktuellerPunkt], menucolor, 2);
 
         } break;
+
+#if defined(ANDROID)
+        case MENUZUSTAND_STORE: {
+            OfflineStore::Inventory items;
+            const bool ok = !g_config_ext.empty() && OfflineStore::Load(g_config_ext + "/offline-store-v1.txt", items);
+            pMenuFont->DrawTextCenterAlign(320, 130, "TIENDA", menucolor, 2);
+            if (!ok) {
+                pDefaultFont->DrawText(125, 185, "ERROR AL LEER LA TIENDA", menucolor);
+                pDefaultFont->DrawText(125, 215, "NO SE MODIFICARAN TUS DATOS", menucolor);
+            } else {
+                const std::string balance = "MONEDAS: " + std::to_string(items.coins);
+                pDefaultFont->DrawText(125, 175, balance.c_str(), menucolor);
+                const std::string lines[] = {
+                    "VIDA EXTRA  10  /  " + std::to_string(items.lives) + " GUARDADAS",
+                    "MEJORA ARMA  20  /  NIVEL " + std::to_string(items.weapons) + "/3",
+                    "BOMBA EXTRA   5  /  " + std::to_string(items.bombs) + " GUARDADAS",
+                    "SKINS  -  PROXIMAMENTE",
+                    "VOLVER"
+                };
+                for (int i = 0; i < 5; ++i)
+                    pDefaultFont->DrawText(125, 210 + i * 30, lines[i].c_str(),
+                                           i == AktuellerPunkt ? menucolor : menucolor2);
+                pDefaultFont->DrawText(125, 385, "1 DIAMANTE = 1 MONEDA", menucolor2);
+                pDefaultFont->DrawText(125, 405, "COMPRAS PARA LA PROXIMA PARTIDA P1", menucolor2);
+                if (!StoreMessage.empty()) pDefaultFont->DrawText(125, 425, StoreMessage.c_str(), menucolor);
+            }
+        } break;
+#endif
 
         case MENUZUSTAND_STARTGAME: {
         } break;
@@ -1324,12 +1362,27 @@ void MenuClass::DoMenu() {
 #endif
             }
 
+#if defined(ANDROID)
+            constexpr int last_main_item = 6;
+#else
+            constexpr int last_main_item = MENUPUNKT_END;
+#endif
             if (AktuellerPunkt < MENUPUNKT_STARTGAME)
-                AktuellerPunkt = MENUPUNKT_END;
+                AktuellerPunkt = last_main_item;
 
-            if (AktuellerPunkt > MENUPUNKT_END)
+            if (AktuellerPunkt > last_main_item)
                 AktuellerPunkt = MENUPUNKT_STARTGAME;
 
+#if defined(ANDROID)
+            if (selected && AktuellerPunkt == 6) {
+                AuswahlPossible = false;
+                AktuellerZustand = MENUZUSTAND_STORE;
+                AktuellerPunkt = 0;
+                StoreMessage.clear();
+                SoundManager.PlayWave(100, 128, 11025, SOUND::CLICK);
+                break;
+            }
+#endif
             // Menu-Punkt im Hauptmenu ausgewählt ?
             if (selected) {
                 AuswahlPossible = false;
@@ -1397,6 +1450,32 @@ void MenuClass::DoMenu() {
                 CreditsPosition = 0;
             }
         } break;  // MAINMENU
+
+#if defined(ANDROID)
+        case MENUZUSTAND_STORE: {
+            if (AktuellerPunkt < 0) AktuellerPunkt = 4;
+            if (AktuellerPunkt > 4) AktuellerPunkt = 0;
+            if (((!CommandLineParams.Arcade && KeyDown(DIK_ESCAPE)) || joy_escape) && AuswahlPossible) {
+                input_counter = 0.0f;
+                AuswahlPossible = false;
+                AktuellerZustand = MENUZUSTAND_MAINMENU;
+                AktuellerPunkt = 6;
+            } else if (selected) {
+                AuswahlPossible = false;
+                if (AktuellerPunkt == 4) {
+                    AktuellerZustand = MENUZUSTAND_MAINMENU;
+                    AktuellerPunkt = 6;
+                } else if (AktuellerPunkt == 3) {
+                    StoreMessage = "SKINS PROXIMAMENTE";
+                } else if (!g_config_ext.empty() && OfflineStore::Buy(g_config_ext + "/offline-store-v1.txt", AktuellerPunkt)) {
+                    StoreMessage = "COMPRA GUARDADA";
+                } else {
+                    StoreMessage = "SALDO INSUFICIENTE, LIMITE O ERROR";
+                }
+                SoundManager.PlayWave(100, 128, 11025, SOUND::CLICK);
+            }
+        } break;
+#endif
 
         // Sound / Musik Lautstärke wählen
         case MENUZUSTAND_VOLUMES: {

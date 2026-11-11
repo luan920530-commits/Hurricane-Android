@@ -107,8 +107,13 @@ jobs:
             fi
           done
 
-      - name: Validar controles tácticos metálicos
-        run: python3 tools/touch-ui/test-icons.py
+      - name: Validar controles tácticos metálicos y persistencia
+        run: |
+          python3 tools/touch-ui/test-icons.py
+          c++ -std=c++17 -Wall -Wextra -pedantic tools/touch-ui/test-layout.cpp -o /tmp/test-touch-layout
+          /tmp/test-touch-layout "$RUNNER_TEMP/touch-layout-test.txt"
+          c++ -std=c++17 -Wall -Wextra -pedantic tools/touch-ui/test-store.cpp -o /tmp/test-offline-store
+          /tmp/test-offline-store "$RUNNER_TEMP/offline-store-test.txt"
 
       # Comprueba también los includes de un fallo que, si no, solo aparece tras compilar:
       # un fichero que existe en local pero se quedó fuera del repositorio por .gitignore.

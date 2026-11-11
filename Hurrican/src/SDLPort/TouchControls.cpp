@@ -21,6 +21,7 @@
 #  include "Globals.hpp"
 #  include "Logdatei.hpp"
 #  include "Main.hpp"
+#  include "TouchLayout.hpp"
 
 TouchControlsClass TouchControls;
 
@@ -299,6 +300,9 @@ void TouchControlsClass::Init() {
                                                                icon.frames_y);
     }
 
+    stick_default_x = 0.173f;
+    stick_default_y = 0.741f;
+    LoadLayout();
     active = available && enabled;
     g_initialised = true;
     editing = false;
@@ -314,6 +318,7 @@ void TouchControlsClass::Init() {
 }
 
 void TouchControlsClass::Shutdown() {
+    if (editing && (drag_action >= 0 || drag_stick)) SaveLayout();
     ClearKeys();
     active = false;
     g_initialised = false;
@@ -357,6 +362,7 @@ void TouchControlsClass::HandleTouchEvent(const SDL_TouchFingerEvent &event) {
 }
 
 void TouchControlsClass::CancelTouches() {
+    if (editing && (drag_action >= 0 || drag_stick)) SaveLayout();
     fingers.clear();
     ClearKeys();
 }
@@ -390,6 +396,7 @@ bool TouchControlsClass::IsActionPressed(VirtualAction action) const {
 
 void TouchControlsClass::ToggleEditing() {
     editing = !editing;
+    if (!editing) SaveLayout();
     ClearKeys();
     Protokoll << "Mando virtual: modo edicion " << (editing ? "activado" : "desactivado")
               << " (mueve los controles con el dedo)" << std::endl;
@@ -403,11 +410,36 @@ void TouchControlsClass::ResetLayout() {
     }
     stick_default_x = 0.173f;
     stick_default_y = 0.741f;
+    SaveLayout();
     Protokoll << "Mando virtual: disposicion restablecida" << std::endl;
+}
+
+void TouchControlsClass::LoadLayout() {
+    static_assert(ACTION_COUNT == TouchLayout::kButtons, "touch layout button count mismatch");
+    TouchLayout::Layout layout{};
+    if (!TouchLayout::Load(g_config_ext + "/touch-layout-v1.txt", layout)) return;
+    stick_default_x = layout.stick.x;
+    stick_default_y = layout.stick.y;
+    for (int i = 0; i < ACTION_COUNT; ++i) {
+        actions[i].x = layout.buttons[i].x;
+        actions[i].y = layout.buttons[i].y;
+    }
+}
+
+void TouchControlsClass::SaveLayout() const {
+    if (g_config_ext.empty()) return;
+    TouchLayout::Layout layout{};
+    layout.stick = {stick_default_x, stick_default_y};
+    for (int i = 0; i < ACTION_COUNT; ++i) layout.buttons[i] = {actions[i].x, actions[i].y};
+    if (!TouchLayout::Save(g_config_ext + "/touch-layout-v1.txt", layout))
+        Protokoll << "Mando virtual: no se pudo guardar la disposicion" << std::endl;
 }
 
 void TouchControlsClass::ClearKeys() {
     fingers.clear();
+    drag_action = -1;
+    drag_stick = false;
+    drag_finger_id = -1;
     if (TastaturPuffer != nullptr) {
         for (auto sc : pressed_scancodes) {
             if (sc > 0 && sc < MAX_KEYS)
@@ -476,6 +508,7 @@ void TouchControlsClass::UpdateEditing(const SDL_TouchFingerEvent &finger, const
     const float py = finger.y * static_cast<float>(win_h);
 
     if (finger.type == SDL_FINGERDOWN) {
+        if (drag_action >= 0 || drag_stick) return;
         // Buscar el control mas cercano al toque, con un margen comodo.
         float best = 1e9f;
         int best_action = -1;
@@ -506,7 +539,12 @@ void TouchControlsClass::UpdateEditing(const SDL_TouchFingerEvent &finger, const
             drag_off_x = actions[best_action].x * screen_rect.w - (px - screen_rect.x);
             drag_off_y = actions[best_action].y * screen_rect.h - (py - screen_rect.y);
         }
+        if (drag_stick || drag_action >= 0) {
+            drag_touch_id = finger.touchId;
+            drag_finger_id = finger.fingerId;
+        }
     } else if (finger.type == SDL_FINGERMOTION) {
+        if (finger.touchId != drag_touch_id || finger.fingerId != drag_finger_id) return;
         if (drag_stick) {
             stick_default_x = std::clamp((px - screen_rect.x + drag_off_x) / screen_rect.w, 0.05f, 0.95f);
             stick_default_y = std::clamp((py - screen_rect.y + drag_off_y) / screen_rect.h, 0.05f, 0.95f);
@@ -517,8 +555,11 @@ void TouchControlsClass::UpdateEditing(const SDL_TouchFingerEvent &finger, const
                 std::clamp((py - screen_rect.y + drag_off_y) / screen_rect.h, 0.03f, 0.97f);
         }
     } else if (finger.type == SDL_FINGERUP) {
+        if (finger.touchId != drag_touch_id || finger.fingerId != drag_finger_id) return;
+        if (drag_action >= 0 || drag_stick) SaveLayout();
         drag_action = -1;
         drag_stick = false;
+        drag_finger_id = -1;
     }
 }
 

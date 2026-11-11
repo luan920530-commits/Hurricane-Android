@@ -113,7 +113,8 @@ class TouchControlsClass {
     void UpdateJoystick();
     void UpdateEditing(const SDL_TouchFingerEvent &finger, const SDL_Rect &screen_rect, int win_w,
                        int win_h);
-    void ApplyLayoutPersist();
+    void LoadLayout();
+    void SaveLayout() const;
 
     bool available = false;  ///< el dispositivo tiene pantalla tactil
     bool enabled = true;     ///< el jugador quiere el mando virtual
@@ -142,6 +143,8 @@ class TouchControlsClass {
     /// Control que se esta arrastrando en modo edicion.
     int drag_action = -1;
     bool drag_stick = false;
+    SDL_TouchID drag_touch_id = 0;
+    SDL_FingerID drag_finger_id = -1;
     float drag_off_x = 0.0f;
     float drag_off_y = 0.0f;
     /// Ultima posicion conocida de cada dedo, para detectar arrastres.

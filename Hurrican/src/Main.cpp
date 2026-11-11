@@ -48,6 +48,7 @@ namespace fs = std::filesystem;
 #  include "SDLPort/DebugPanel.hpp"
 #  include "SDLPort/AndroidPort.hpp"
 #  include "SDLPort/TouchControls.hpp"
+#  include "SDLPort/Store.hpp"
 #endif
 
 // Memory Leaks
@@ -1094,6 +1095,16 @@ bool Heartbeat() {
                 delete (pIntro);
                 InitNewGame();
                 InitNewGameLevel();
+#if defined(ANDROID)
+                // Only consume purchases after the level has loaded successfully.
+                OfflineStore::Inventory items;
+                if (Stage >= 0 && !g_config_ext.empty() &&
+                    OfflineStore::TakeForNewGame(g_config_ext + "/offline-store-v1.txt", items)) {
+                    Player[0].Lives += items.lives;
+                    Player[0].SmartBombs += items.bombs;
+                    Player[0].CurrentWeaponLevel[0] += items.weapons;
+                }
+#endif
                 SpielZustand = GameStateEnum::GAMELOOP;
             }
         } break;
