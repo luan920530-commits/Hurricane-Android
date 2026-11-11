@@ -1,0 +1,28 @@
+TIENDA SIN DINERO REAL (Android)
+
+En el menu principal, selecciona TIENDA. Cada diamante recogido durante una
+partida normal da una moneda adicional, sin descontar la puntuacion ni los
+beneficios originales de los diamantes. El tutorial y las demos no dan monedas.
+
+- Vida extra: 10 monedas; hasta 9 guardadas.
+- Mejora inicial del arma principal: 20 monedas; permanente, hasta nivel 3.
+- Bomba inteligente: 5 monedas; hasta 9 guardadas.
+- Skins: apartado reservado; aun no se venden.
+
+Las vidas y bombas compradas se entregan al jugador 1 al iniciar una partida
+nueva y se consumen entonces. Las mejoras del arma se aplican al jugador 1 en
+cada partida nueva. Una partida ya empezada o cargada no recibe retroactivamente
+estas compras. En cooperativo se aplican solo al jugador 1.
+
+El saldo y las compras se guardan localmente en el dispositivo: borrar los
+datos de la aplicacion o desinstalarla puede eliminarlos. No hay pagos ni
+sincronizacion en linea. Un archivo de tienda ilegible no se sobrescribe.
+
+CONTROLES TACTILES
+
+En el panel DBG, activa la edicion, cierra el panel y arrastra los controles.
+La posicion se guarda al soltar cada control y al salir del modo de edicion.
+Reabre DBG para desactivar la edicion. El boton DBG abre el panel incluso en
+modo de edicion y por ello no se puede arrastrar desde ese modo. Actualmente se
+guardan posiciones, no existe ajuste de tamano. La configuracion es local al
+dispositivo y puede desaparecer al borrar los datos de la aplicacion.

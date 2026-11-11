@@ -48,6 +48,7 @@ namespace fs = std::filesystem;
 #  include "SDLPort/DebugPanel.hpp"
 #  include "SDLPort/AndroidPort.hpp"
 #  include "SDLPort/TouchControls.hpp"
+#  include "SDLPort/Store.hpp"
 #endif
 
 // Memory Leaks
@@ -107,6 +108,67 @@ std::string g_save_ext;         // Where high scores and save games
 
 sCommandLineParams CommandLineParams;
 
+#if defined(ANDROID)
+namespace {
+// Der Finger, der das Panel geöffnet hat, wird bis zum Loslassen vom Spielermando abgeschirmt.
+bool DebugPanelOpenBlock = false;
+}
+
+void Android_HandleTouchEvent(const SDL_TouchFingerEvent &event) {
+    switch (event.type) {
+        case SDL_FINGERDOWN: {
+            if (DebugPanel.IsOpen()) {
+                DebugPanel.HandleTouch(event.x, event.y, true, DirectGraphics.GetRenderRect());
+                DebugPanelOpenBlock = true;
+                TouchControls.CancelTouches();
+            } else {
+                const float px = event.x * static_cast<float>(DirectGraphics.GetWindowWidth());
+                const float py = event.y * static_cast<float>(DirectGraphics.GetWindowHeight());
+                const SDL_Rect touch_area{0, 0, DirectGraphics.GetWindowWidth(),
+                                          DirectGraphics.GetWindowHeight()};
+                if (TouchControls.HitDebugButton(px, py, touch_area)) {
+                    DebugPanel.SetOpen(true);
+                    DebugPanelOpenBlock = true;
+                    TouchControls.CancelTouches();
+                } else {
+                    TouchControls.HandleTouchEvent(event);
+                }
+            }
+            break;
+        }
+        case SDL_FINGERMOTION:
+            if (!DebugPanelOpenBlock && !DebugPanel.IsOpen())
+                TouchControls.HandleTouchEvent(event);
+            break;
+        case SDL_FINGERUP:
+            if (DebugPanelOpenBlock) {
+                if (DebugPanel.IsOpen())
+                    DebugPanel.HandleTouch(event.x, event.y, false, DirectGraphics.GetRenderRect());
+                DebugPanelOpenBlock = false;
+                TouchControls.CancelTouches();
+            } else {
+                TouchControls.HandleTouchEvent(event);
+            }
+            break;
+        default:
+            break;
+    }
+}
+
+void Android_PumpTouchEvents() {
+    constexpr int EVENT_BATCH_SIZE = 16;
+    SDL_Event events[EVENT_BATCH_SIZE];
+    int count = 0;
+    do {
+        // Solo retiramos los eventos finger para no robar a Main los eventos de lifecycle,
+        // ventana, joystick o salida cuando estamos dentro de un bucle modal.
+        count = SDL_PeepEvents(events, EVENT_BATCH_SIZE, SDL_GETEVENT, SDL_FINGERDOWN, SDL_FINGERMOTION);
+        for (int i = 0; i < count; ++i)
+            Android_HandleTouchEvent(events[i].tfinger);
+    } while (count == EVENT_BATCH_SIZE);
+}
+#endif
+
 // --------------------------------------------------------------------------------------
 // Variablen für den Spielablauf
 // --------------------------------------------------------------------------------------
@@ -120,8 +182,13 @@ GameStateEnum SpielZustand = GameStateEnum::CRACKTRO;  // Aktueller Zustand des 
 
 void FillCommandLineParams(int argc, char *args[]) {
 
-    // Set some sensible defaults
+#if defined(ANDROID)
+    // Android llena toda la pantalla: escalar el FBO hasta los cuatro bordes elimina las
+    // bandas laterales. El overlay táctil sigue anclado a la ventana completa.
+    CommandLineParams.RunWindowMode = ScreenMode::FULLSCREEN_STRETCHED;
+#else
     CommandLineParams.RunWindowMode = ScreenMode::FULLSCREEN;
+#endif
     CommandLineParams.Scanlines = false;
     CommandLineParams.ColorBleed = false;
     CommandLineParams.ScreenCurvature = false;
@@ -469,9 +536,6 @@ int main(int argc, char *argv[]) {
     // Marcada cuando Android destruye el contexto OpenGL; se repara fuera del bucle de
     // eventos para no recompilar shaders en mitad del procesado.
     bool context_lost = false;
-    // true mientras el dedo que abrio/interactuo con el panel sigue en la pantalla, para que
-    // ese mismo toque no llegue al mando virtual.
-    bool DebugPanelOpenBlock = false;
 #endif
 
     while (GameRunning) {
@@ -499,6 +563,7 @@ int main(int argc, char *argv[]) {
                  */
                 case SDL_APP_WILLENTERBACKGROUND:
                     Protokoll << "Android: la app pasa a segundo plano, en pausa" << std::endl;
+                    TouchControls.CancelTouches();
                     GamePaused = true;
                     SoundManager.PauseSongs();
                     SoundManager.PauseSounds();
@@ -521,32 +586,15 @@ int main(int argc, char *argv[]) {
 #endif
 #if defined(ANDROID)
                 /*
-                 * Toques para el panel de depuracion.
-                 *
-                 * Se procesan aqui, antes que el mando virtual, para que mientras el panel
-                 * esta abierto el jugador no mueva al personaje sin querer. El dedo se pasa
-                 * en coordenadas normalizadas de ventana, que es lo que da SDL.
+                 * Enrutar el ciclo completo de cada dedo (bajada, movimiento y subida).
+                 * El panel de depuracion tiene prioridad y consume los toques mientras esta
+                 * abierto; los demas se entregan al mando multitactil.
                  */
                 case SDL_FINGERDOWN:
-                case SDL_FINGERUP: {
-                    const bool down = (event.type == SDL_FINGERDOWN);
-                    if (down && DebugPanel.IsOpen()) {
-                        DebugPanel.HandleTouch(event.tfinger.x, event.tfinger.y, true,
-                                               DirectGraphics.GetRenderRect());
-                        DebugPanelOpenBlock = true;
-                    } else if (!down && DebugPanelOpenBlock) {
-                        DebugPanel.HandleTouch(event.tfinger.x, event.tfinger.y, false,
-                                               DirectGraphics.GetRenderRect());
-                        DebugPanelOpenBlock = false;
-                    } else if (down) {
-                        // Panel cerrado: un toque en el boton DBG lo abre.
-                        const float px = event.tfinger.x * static_cast<float>(DirectGraphics.GetWindowWidth());
-                        const float py = event.tfinger.y * static_cast<float>(DirectGraphics.GetWindowHeight());
-                        if (TouchControls.HitDebugButton(px, py, DirectGraphics.GetRenderRect()))
-                            DebugPanel.SetOpen(true);
-                    }
+                case SDL_FINGERMOTION:
+                case SDL_FINGERUP:
+                    Android_HandleTouchEvent(event.tfinger);
                     break;
-                }
                 case SDL_WINDOWEVENT:
                     if (event.window.event == SDL_WINDOWEVENT_RESIZED ||
                         event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
@@ -1047,6 +1095,16 @@ bool Heartbeat() {
                 delete (pIntro);
                 InitNewGame();
                 InitNewGameLevel();
+#if defined(ANDROID)
+                // Only consume purchases after the level has loaded successfully.
+                OfflineStore::Inventory items;
+                if (Stage >= 0 && !g_config_ext.empty() &&
+                    OfflineStore::TakeForNewGame(g_config_ext + "/offline-store-v1.txt", items)) {
+                    Player[0].Lives += items.lives;
+                    Player[0].SmartBombs += items.bombs;
+                    Player[0].CurrentWeaponLevel[0] += items.weapons;
+                }
+#endif
                 SpielZustand = GameStateEnum::GAMELOOP;
             }
         } break;
@@ -1261,6 +1319,12 @@ void StartOuttro() {
 //----------------------------------------------------------------------------
 
 void StartIntro() {
+#if defined(ANDROID)
+    // El toque que confirma la dificultad no debe quedar retenido en el intro. Su
+    // constructor espera teclas liberadas; descartar aquí los contactos virtuales evita
+    // bloquear el arranque del juego cuando Android aún no entrega FINGERUP.
+    TouchControls.CancelTouches();
+#endif
     pMenu->StartProgressBar(12);
 
     pIntro = new IntroClass();

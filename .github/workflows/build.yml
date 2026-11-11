@@ -84,8 +84,39 @@ jobs:
           echo "Datos del juego presentes:"
           du -sh Hurrican/data Hurrican/lang
 
-      # Comprobacion barata (segundos) de un fallo que, si no, solo aparece tras compilar:
-      # un fichero que existe en local pero se quedo fuera del repositorio por .gitignore.
+      # Comprobaciones baratas previas al build: evita publicar una APK con los creditos
+      # antiguos o con iconos tactiles que se quedaron fuera del repositorio.
+      - name: Validar créditos Android e iconos táctiles
+        run: |
+          set -eu
+          CREDITS=Hurrican/src/creditStrings.hpp
+          for credit in "Luis Antonio Aguilar" "Asistente" "GitHub"; do
+            if ! grep -Fq "\"$credit\"" "$CREDITS"; then
+              echo "::error::Falta el credito '$credit' en $CREDITS"
+              exit 1
+            fi
+          done
+          if grep -Eiq 'poke53280|www\.poke53280' Hurrican/src/creditStrings.hpp Hurrican/src/CCracktro.cpp Hurrican/src/Menu.cpp Hurrican/lang/*.lng; then
+            echo "::error::Quedó una referencia visible a Poke53280 en los textos distribuidos"
+            exit 1
+          fi
+          for icon in touch_arma_v2.png touch_salto_v2.png touch_fuego_v2.png touch_granada_v2.png touch_bomba_v2.png touch_pausa_v2.png touch_ajustes_v2.png touch_powerline.png touch_blitz.png; do
+            if [ ! -s "Hurrican/data/textures/$icon" ]; then
+              echo "::error::Falta el icono táctil Hurrican/data/textures/$icon"
+              exit 1
+            fi
+          done
+
+      - name: Validar controles tácticos metálicos y persistencia
+        run: |
+          python3 tools/touch-ui/test-icons.py
+          c++ -std=c++17 -Wall -Wextra -pedantic tools/touch-ui/test-layout.cpp -o /tmp/test-touch-layout
+          /tmp/test-touch-layout "$RUNNER_TEMP/touch-layout-test.txt"
+          c++ -std=c++17 -Wall -Wextra -pedantic tools/touch-ui/test-store.cpp -o /tmp/test-offline-store
+          /tmp/test-offline-store "$RUNNER_TEMP/offline-store-test.txt"
+
+      # Comprueba también los includes de un fallo que, si no, solo aparece tras compilar:
+      # un fichero que existe en local pero se quedó fuera del repositorio por .gitignore.
       - name: Comprobar que todos los #include apuntan a ficheros del repositorio
         run: python3 .github/scripts/check_includes.py .
 

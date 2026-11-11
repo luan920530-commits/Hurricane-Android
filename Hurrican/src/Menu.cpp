@@ -35,7 +35,15 @@
 #include "Menu.hpp"
 #include "Partikelsystem.hpp"
 #include "Player.hpp"
+#if defined(ANDROID)
+#  include "SDLPort/TouchControls.hpp"
+#  include "SDLPort/Store.hpp"
+#endif
 #include "Timer.hpp"
+
+#if defined(ANDROID)
+static std::string StoreMessage;
+#endif
 
 // Farben für die Highscore erstellen, in der die Namen aufblinken
 const std::array<D3DCOLOR, MAX_COLORS> HighscoreColors = {
@@ -192,6 +200,10 @@ MenuClass::MenuClass() {
 
     Skills.LoadImage("skills.png", 200, 200, 100, 100, 2, 2);
 
+    // Preload both idle sheets for the single-player selection showcase.
+    CharacterPortraits[0].LoadImage("p1_hurri_idle.png", 350, 320, 70, 80, 5, 4);
+    CharacterPortraits[1].LoadImage("p1_female_hurri_idle.png", 350, 320, 70, 80, 5, 4);
+
     MenuStar.LoadImage("star.png", 5, 5, 5, 5, 1, 1);
     MenuStar.SetRect(0, 0, 5, 5);
 
@@ -309,22 +321,12 @@ void MenuClass::ShowMenu() {
     // DKS - Added lowres support, which has very limited room at bottom:
     if (CommandLineParams.LowRes) {
         // Under Low-res, don't display controls message at bottom and shift other text up a bit
-        pDefaultFont->DrawText(10.0f, 458, "www.poke53280.de", menucolor, 0);
-        pDefaultFont->DrawText(static_cast<float>(640 - pDefaultFont->StringLength("www.hurrican-game.de", 0) - 10), 458,
-                               "www.hurrican-game.de", menucolor, 0);
-#if defined(GCW)
-        // Draw port credit text for Pickle & Senquack
-        if (AktuellerZustand == MENUZUSTAND_MAINMENU)
-            pDefaultFont->DrawTextCenterAlign(320.0f, 428, "OpenGL and GCW Zero port by Pickle & Senquack", menucolor,
-                                              0);
-#endif
+        // Se dejan libres los margenes inferiores en Android/low-res; sin URLs heredadas.
+
     } else {
         if (AktuellerZustand != MENUPUNKT_CREDITS && AktuellerZustand != MENUZUSTAND_ENTERNAME)
 
             pDefaultFont->DrawTextCenterAlign(320.0f, 462, TextArray[TEXT::MENUE_ANLEITUNG], menucolor, 0);
-        pDefaultFont->DrawText(10.0f, 462, "www.poke53280.de", menucolor, 0);
-        pDefaultFont->DrawText(static_cast<float>(640 - pDefaultFont->StringLength("www.hurrican-game.de", 0) - 10), 462,
-                               "www.hurrican-game.de", menucolor, 0);
     }
 
     // graue Linien
@@ -371,10 +373,43 @@ void MenuClass::ShowMenu() {
                                                        TextArray[TEXT::MENUE_SPIEL_STARTEN + i], menucolor2, 2);
                 }
 
-            pMenuFont->DrawTextCenterAlign(320, ypos + OFFSET + AktuellerPunkt * 35,
-                                           TextArray[TEXT::MENUE_SPIEL_STARTEN + AktuellerPunkt], menucolor, 2);
+#if defined(ANDROID)
+            pMenuFont->DrawTextCenterAlign(320, ypos + OFFSET + 6 * 35, "TIENDA",
+                                           AktuellerPunkt == 6 ? menucolor : menucolor2, 2);
+            if (AktuellerPunkt < 6)
+#endif
+                pMenuFont->DrawTextCenterAlign(320, ypos + OFFSET + AktuellerPunkt * 35,
+                                               TextArray[TEXT::MENUE_SPIEL_STARTEN + AktuellerPunkt], menucolor, 2);
 
         } break;
+
+#if defined(ANDROID)
+        case MENUZUSTAND_STORE: {
+            OfflineStore::Inventory items;
+            const bool ok = !g_config_ext.empty() && OfflineStore::Load(g_config_ext + "/offline-store-v1.txt", items);
+            pMenuFont->DrawTextCenterAlign(320, 130, "TIENDA", menucolor, 2);
+            if (!ok) {
+                pDefaultFont->DrawText(125, 185, "ERROR AL LEER LA TIENDA", menucolor);
+                pDefaultFont->DrawText(125, 215, "NO SE MODIFICARAN TUS DATOS", menucolor);
+            } else {
+                const std::string balance = "MONEDAS: " + std::to_string(items.coins);
+                pDefaultFont->DrawText(125, 175, balance.c_str(), menucolor);
+                const std::string lines[] = {
+                    "VIDA EXTRA  10  /  " + std::to_string(items.lives) + " GUARDADAS",
+                    "MEJORA ARMA  20  /  NIVEL " + std::to_string(items.weapons) + "/3",
+                    "BOMBA EXTRA   5  /  " + std::to_string(items.bombs) + " GUARDADAS",
+                    "SKINS  -  PROXIMAMENTE",
+                    "VOLVER"
+                };
+                for (int i = 0; i < 5; ++i)
+                    pDefaultFont->DrawText(125, 210 + i * 30, lines[i].c_str(),
+                                           i == AktuellerPunkt ? menucolor : menucolor2);
+                pDefaultFont->DrawText(125, 385, "1 DIAMANTE = 1 MONEDA", menucolor2);
+                pDefaultFont->DrawText(125, 405, "COMPRAS PARA LA PROXIMA PARTIDA P1", menucolor2);
+                if (!StoreMessage.empty()) pDefaultFont->DrawText(125, 425, StoreMessage.c_str(), menucolor);
+            }
+        } break;
+#endif
 
         case MENUZUSTAND_STARTGAME: {
         } break;
@@ -919,6 +954,56 @@ void MenuClass::ShowMenu() {
 
         } break;
 
+        case MENUZUSTAND_CHARACTER: {
+            // Arcade shooter roster: dark steel panels, olive HUD, amber active frame.
+            const D3DCOLOR panel = D3DCOLOR_RGBA(8, 16, 20, 232);
+            const D3DCOLOR panelInset = D3DCOLOR_RGBA(19, 30, 31, 224);
+            const D3DCOLOR brass = D3DCOLOR_RGBA(207, 166, 78, alpha);
+            const D3DCOLOR dimBrass = D3DCOLOR_RGBA(105, 101, 74, alpha / 2);
+            RenderRect(103, 128, 434, 294, D3DCOLOR_RGBA(0, 0, 0, 190));
+            RenderRect(103, 128, 434, 3, brass);
+            RenderRect(103, 419, 434, 3, brass);
+            RenderRect(103, 128, 3, 294, brass);
+            RenderRect(534, 128, 3, 294, brass);
+            RenderRect(110, 136, 420, 32, panelInset);
+            RenderRect(110, 136, 420, 1, D3DCOLOR_RGBA(239, 205, 126, alpha));
+            pMenuFont->DrawTextCenterAlign(320, 139, TextArray[TEXT::CHARACTER_SELECT], menucolor, 2);
+
+            const int cardX[2] = {122, 334};
+            const int previewFrame = static_cast<int>(ScrollPos * 3.0f) % 20;
+            for (int i = 0; i < 2; ++i) {
+                const bool active = (AktuellerPunkt == i);
+                const int x = cardX[i];
+                const D3DCOLOR edge = active ? brass : dimBrass;
+                RenderRect(x, 176, 184, 220, active ? panelInset : panel);
+                RenderRect(x, 176, 184, 2, edge);
+                RenderRect(x, 394, 184, 2, edge);
+                RenderRect(x, 176, 2, 220, edge);
+                RenderRect(x + 182, 176, 2, 220, edge);
+                RenderRect(x + 8, 184, 168, 148, D3DCOLOR_RGBA(5, 10, 12, 192));
+
+                pDefaultFont->DrawText(x + 10, 179, i == 0 ? "01  /  P1" : "02  /  P1",
+                                       active ? 0xFFFFD77A : 0x99D0C09A);
+                DirectGraphics.SetColorKeyMode();
+                CharacterPortraits[i].RenderSpriteScaled(static_cast<float>(x + 27), 187, 130, 139,
+                                                          previewFrame, active ? 0xFFFFFFFF : 0xB8FFFFFF);
+                DirectGraphics.SetAdditiveMode();
+                pMenuFont->DrawTextCenterAlign(x + 92, 338, TextArray[TEXT::CHARACTER_MALE + i],
+                                               active ? 0xFFFFFFFF : 0x99FFFFFF, 2);
+
+                // Three compact arcade status meters; both characters retain identical gameplay stats.
+                for (int meter = 0; meter < 3; ++meter) {
+                    int y = 365 + meter * 8;
+                    RenderRect(x + 38, y, 108, 4, D3DCOLOR_RGBA(38, 47, 42, alpha));
+                    RenderRect(x + 38, y, 82, 4, active ? D3DCOLOR_RGBA(194, 158, 74, alpha)
+                                                        : D3DCOLOR_RGBA(119, 127, 91, alpha / 2));
+                }
+            }
+
+            pMenuFont->DrawTextCenterAlign(110, 270, "<", 0xFFFFD77A, 2);
+            pMenuFont->DrawTextCenterAlign(530, 270, ">", 0xFFFFD77A, 2);
+        } break;
+
         case MENUZUSTAND_SELECTSKILL: {
             pMenuFont->DrawTextCenterAlign(320, ypos + OFFSET, TextArray[TEXT::MENUE_SPIEL_STARTEN], menucolor, 2);
 
@@ -1269,16 +1354,35 @@ void MenuClass::DoMenu() {
                 AktuellerPunkt = MENUPUNKT_CONTINUEGAME;
                 selected = true;
 
+#if defined(ANDROID)
+                TouchControls.CancelTouches();
+#else
                 while (DirectInput.AreAllKeysReleased() == false)
                     DirectInput.UpdateTastatur();
+#endif
             }
 
+#if defined(ANDROID)
+            constexpr int last_main_item = 6;
+#else
+            constexpr int last_main_item = MENUPUNKT_END;
+#endif
             if (AktuellerPunkt < MENUPUNKT_STARTGAME)
-                AktuellerPunkt = MENUPUNKT_END;
+                AktuellerPunkt = last_main_item;
 
-            if (AktuellerPunkt > MENUPUNKT_END)
+            if (AktuellerPunkt > last_main_item)
                 AktuellerPunkt = MENUPUNKT_STARTGAME;
 
+#if defined(ANDROID)
+            if (selected && AktuellerPunkt == 6) {
+                AuswahlPossible = false;
+                AktuellerZustand = MENUZUSTAND_STORE;
+                AktuellerPunkt = 0;
+                StoreMessage.clear();
+                SoundManager.PlayWave(100, 128, 11025, SOUND::CLICK);
+                break;
+            }
+#endif
             // Menu-Punkt im Hauptmenu ausgewählt ?
             if (selected) {
                 AuswahlPossible = false;
@@ -1346,6 +1450,32 @@ void MenuClass::DoMenu() {
                 CreditsPosition = 0;
             }
         } break;  // MAINMENU
+
+#if defined(ANDROID)
+        case MENUZUSTAND_STORE: {
+            if (AktuellerPunkt < 0) AktuellerPunkt = 4;
+            if (AktuellerPunkt > 4) AktuellerPunkt = 0;
+            if (((!CommandLineParams.Arcade && KeyDown(DIK_ESCAPE)) || joy_escape) && AuswahlPossible) {
+                input_counter = 0.0f;
+                AuswahlPossible = false;
+                AktuellerZustand = MENUZUSTAND_MAINMENU;
+                AktuellerPunkt = 6;
+            } else if (selected) {
+                AuswahlPossible = false;
+                if (AktuellerPunkt == 4) {
+                    AktuellerZustand = MENUZUSTAND_MAINMENU;
+                    AktuellerPunkt = 6;
+                } else if (AktuellerPunkt == 3) {
+                    StoreMessage = "SKINS PROXIMAMENTE";
+                } else if (!g_config_ext.empty() && OfflineStore::Buy(g_config_ext + "/offline-store-v1.txt", AktuellerPunkt)) {
+                    StoreMessage = "COMPRA GUARDADA";
+                } else {
+                    StoreMessage = "SALDO INSUFICIENTE, LIMITE O ERROR";
+                }
+                SoundManager.PlayWave(100, 128, 11025, SOUND::CLICK);
+            }
+        } break;
+#endif
 
         // Sound / Musik Lautstärke wählen
         case MENUZUSTAND_VOLUMES: {
@@ -1988,6 +2118,7 @@ void MenuClass::DoMenu() {
 
                     // Game starten mit Tutorial
                     NUMPLAYERS = 1;
+                    SetSinglePlayerFemale(false);
                     RunningTutorial = true;
                     Skill = SKILL_EASY;
                     //					SoundManager.StopSong(MUSIC::MENU, false);
@@ -2031,14 +2162,50 @@ void MenuClass::DoMenu() {
             // Menu-Punkt ausgewählt ?
             if (selected) {
                 tempNUMPLAYERS = AktuellerPunkt + 1;
-                AktuellerPunkt = 1;
-
-                AktuellerZustand = MENUZUSTAND_SELECTSKILL;
+                SetSinglePlayerFemale(false);
+                if (tempNUMPLAYERS == 1) {
+                    AktuellerPunkt = 0;
+                    AktuellerZustand = MENUZUSTAND_CHARACTER;
+                } else {
+                    AktuellerPunkt = 1;
+                    AktuellerZustand = MENUZUSTAND_SELECTSKILL;
+                }
                 SoundManager.PlayWave(100, 128, 11025, SOUND::CLICK);
 
                 AuswahlPossible = false;
             }
         } break;  // SPIEL VERLASSEN
+
+        // Einzelspieler-Charakter auswählen
+        case MENUZUSTAND_CHARACTER: {
+            if (AktuellerPunkt < 0)
+                AktuellerPunkt = 1;
+            if (AktuellerPunkt > 1)
+                AktuellerPunkt = 0;
+
+            if (AuswahlPossible && (KeyDown(DIK_LEFT) || KeyDown(DIK_RIGHT) || KeyDown(DIK_NUMPAD4) ||
+                                   KeyDown(DIK_NUMPAD6) || joy_left || joy_right)) {
+                AktuellerPunkt = 1 - AktuellerPunkt;
+                AuswahlPossible = false;
+                input_counter = 0.0f;
+                SoundManager.PlayWave(100, 128, 11025, SOUND::CLICK);
+            }
+
+            if (((!CommandLineParams.Arcade && KeyDown(DIK_ESCAPE)) || joy_escape) && AuswahlPossible == true) {
+                input_counter = 0.0f;
+                AuswahlPossible = false;
+                AktuellerZustand = MENUZUSTAND_PLAYERCOUNT;
+                AktuellerPunkt = 0;
+            }
+
+            if (selected) {
+                SetSinglePlayerFemale(AktuellerPunkt == 1);
+                AktuellerPunkt = 1;
+                AktuellerZustand = MENUZUSTAND_SELECTSKILL;
+                AuswahlPossible = false;
+                SoundManager.PlayWave(100, 128, 11025, SOUND::CLICK);
+            }
+        } break;
 
         // Skill auswählen
         case MENUZUSTAND_SELECTSKILL: {
@@ -2052,8 +2219,13 @@ void MenuClass::DoMenu() {
             if (((!CommandLineParams.Arcade && KeyDown(DIK_ESCAPE)) || joy_escape) && AuswahlPossible == true) {
                 input_counter = 0.0f;
                 AuswahlPossible = false;
-                AktuellerZustand = MENUZUSTAND_PLAYERCOUNT;
-                AktuellerPunkt = tempNUMPLAYERS - 1;
+                if (tempNUMPLAYERS == 1) {
+                    AktuellerZustand = MENUZUSTAND_CHARACTER;
+                    AktuellerPunkt = SinglePlayerFemale ? 1 : 0;
+                } else {
+                    AktuellerZustand = MENUZUSTAND_PLAYERCOUNT;
+                    AktuellerPunkt = tempNUMPLAYERS - 1;
+                }
             }
 
             // Menu-Punkt ausgewählt ?
@@ -2111,6 +2283,7 @@ void MenuClass::DoMenu() {
                     // DKS - But I have reversed it here, because InitNewGame() depended on
                     //      NUMPLAYERS being set correctly.
                     NUMPLAYERS = Savegames[AktuellerPunkt].Players;
+                    SetSinglePlayerFemale(false);
                     InitNewGame();
 
                     // Werte von Spieler auf das Savegame übertragen

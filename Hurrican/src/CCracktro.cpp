@@ -18,28 +18,22 @@
 
 char CrackText[] = {
     "                                              "
-    "yeehaaw! poke is back with another fine release of a "
-    "retro-remake! this time, its -hurrican-, a remake of the great "
-    "classic turrican made by manfred trenz, chris huelsbeck, andreas escher,"
-    " jeroen tel, peter thierolf, ramiro vaca, markus siebold, julian eggebrecht,"
-    " celal kandemiroglu and many other people. it took us a loooong time to crack "
-    "this damn game, but at least it's here. hope you like it... "
-    "for updates and more visit www.hurrican-game.de or www.poke53280.de "
-    "and now have fun with this game!"
+    "Hurrican returns on Android with a new fullscreen adventure. "
+    "Run, jump, fight and discover every secret across a world full of danger. "
+    "Built for touch controls and adapted to your screen. "
+    "A new journey begins now. Enjoy the adventure! "
     "                                               "
     ""};
 
 char StaticText[] = {
     "                                   "
-    "poke53280 proudly presents -hurrican- cracked on 05-31-2007 by eiswuxe and turri. "
-    "greetings fly to all turrican fans worldwide. "
-    "visit www.hurrican-game.de for more infos, updates, downloads. check out the "
-    "create section to learn how to make your own hurrican levels and add-ons! "
-    "we hope you like this game!"
+    "Hurrican Android. Diseno grafico: Luis Antonio Aguilar. "
+    "Programacion: asistente. APK compilada con GitHub. "
+    "Disfruta el juego!"
     "                                     "};
 
-char BlinkText[][30] = {"poke53280",  "brings you",      "-hurrican-", "cracked on",
-                        "05-31-2007", "always remember", "shoot...",   "or die!"};
+char BlinkText[][30] = {"HURRICAN", "ANDROID", "EDITION", "DESIGNED BY",
+                        "LUIS ANTONIO", "AGUILAR", "SHOOT...", "HAVE FUN!"};
 
 D3DCOLOR ScrollCol[] = {0xFF000088, 0xFF000088, 0xFF0000AA, 0xFF0000AA, 0xFF0000FF, 0xFF0000FF, 0xFF0000FF, 0xFF0000FF,
                         0xFF0088FF, 0xFF0088FF, 0xFF0088FF, 0xFF0088FF, 0xFFAAFFEE, 0xFFAAFFEE, 0xFFAAFFEE, 0xFFAAFFEE,

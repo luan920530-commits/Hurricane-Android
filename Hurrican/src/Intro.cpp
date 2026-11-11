@@ -19,6 +19,9 @@
 #include <vector>
 #include "DX8Sound.hpp"
 #include "Gameplay.hpp"
+#if defined(ANDROID)
+#  include <SDL.h>
+#endif
 
 // --------------------------------------------------------------------------------------
 // Konstruktor, lädt die Grafiken
@@ -41,8 +44,19 @@ IntroClass::IntroClass() {
     Counter = 0.0f;
     SoundManager.LoadSong("intro.it", MUSIC::INTRO);
 
+#if defined(ANDROID)
+    // No bloquear la entrada al modo normal si el evento táctil de confirmación sigue
+    // retenido durante el cambio de menú a intro. StartIntro limpia contactos virtuales;
+    // este límite también protege frente a teclas físicas que Android no libere a tiempo.
+    const Uint32 release_deadline = SDL_GetTicks() + 500;
+    while (!DirectInput.AreAllKeysReleased() && SDL_GetTicks() < release_deadline) {
+        DirectInput.UpdateTastatur();
+        SDL_Delay(5);
+    }
+#else
     while (DirectInput.AreAllKeysReleased() == false)
         DirectInput.UpdateTastatur();
+#endif
 
     // Generate a series of lines from the intro text that are split if too long to display:
     for (int line_ctr = 0; line_ctr <= 23; line_ctr++) {

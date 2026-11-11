@@ -19,6 +19,17 @@ import zipfile
 MIN_FICHEROS_DATOS = 600
 MIN_FICHEROS_IDIOMA = 5
 MIN_BYTES_ASSETS = 60 * 1024 * 1024
+ICONOS_TACTILES = (
+    "touch_arma_v2.png",
+    "touch_salto_v2.png",
+    "touch_fuego_v2.png",
+    "touch_granada_v2.png",
+    "touch_bomba_v2.png",
+    "touch_pausa_v2.png",
+    "touch_ajustes_v2.png",
+    "touch_powerline.png",
+    "touch_blitz.png",
+)
 
 
 def main():
@@ -44,12 +55,18 @@ def main():
     indice = [n for n in nombres if n == "assets/hurrican_index.txt"]
     bytes_assets = sum(z.getinfo(n).file_size for n in assets)
     librerias = sorted(n for n in nombres if n.startswith("lib/"))
+    iconos_esperados = {f"assets/data/textures/{nombre}" for nombre in ICONOS_TACTILES}
+    iconos_faltantes = sorted(iconos_esperados.difference(nombres))
 
     print(
         f"Assets: {len(assets)} ficheros ({len(datos)} de datos, {len(idioma)} de idioma), "
         f"{bytes_assets / 1024 / 1024:.1f} MB sin comprimir"
     )
     print(f"Indice de assets: {'presente' if indice else 'FALTA'}")
+    print(
+        f"Iconos tactiles: {len(ICONOS_TACTILES) - len(iconos_faltantes)}/{len(ICONOS_TACTILES)} "
+        f"presentes"
+    )
     print("Librerias nativas:", ", ".join(librerias) or "ninguna")
     print("Ejemplos de datos:", ", ".join(datos[:3]) or "ninguno")
 
@@ -65,6 +82,8 @@ def main():
         )
     if not indice:
         problemas.append("falta hurrican_index.txt (la copia de datos en el movil no funcionaria)")
+    if iconos_faltantes:
+        problemas.append("faltan iconos tactiles: " + ", ".join(iconos_faltantes))
     if not any(l.endswith("/libmain.so") for l in librerias):
         problemas.append("falta lib/libmain.so (el juego no arrancaria)")
 

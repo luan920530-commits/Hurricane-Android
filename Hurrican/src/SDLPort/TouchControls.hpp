@@ -1,34 +1,18 @@
 /**
  * Controles tactiles de Android - mando virtual.
  *
- * Hurrican solo consulta teclado: la logica del jugador lee KeyDown(DIK_...). En lugar de
- * reescribir el motor, este modulo dibuja un mando en pantalla y escribe en el mismo buffer
- * de teclas que consulta el juego (DirectInputClass::TouchKeyboard). Asi el juego se comporta
- * exactamente igual que con teclado.
+ * Hurrican lee las acciones configuradas por el jugador y el mando las alimenta directamente,
+ * sin depender de que el perfil activo sea teclado o joystick. Tambien escribe las teclas
+ * virtuales en TouchKeyboard para conservar su compatibilidad con menus y pantallas.
  *
- * DISPOSICION (pensada para jugar con los dos pulgares, como en Free Fire o Call of Duty
- * Mobile; todo se puede arrastrar y el juego recuerda donde lo dejaste):
+ * DISPOSICION de la captura: cruceta a la izquierda e iconos de pausa, ajustes, bomba,
+ * granada, rayo, blitz, pistola, fuego y salto. Las posiciones usan toda la ventana mientras
+ * el juego conserva su area 4:3 centrada.
  *
- *   +--------------------------------------------------------------+
- *   | [ESC]                                              [DEBUG]   |
- *   |                                                              |
- *   |                ( zona de juego, sin overlay )                |
- *   |                                                              |
- *   |      (joystick)                        (SALTAR)              |
- *   |        MOVER                        (DISPARO)  (BLITZ)       |
- *   |                                     (POWER) (GRANADA)        |
- *   |                                     (ARMA)  (BOMBA)          |
- *   +--------------------------------------------------------------+
- *
- * Diferencias con el mando anterior (doce botones fijos):
- *
- *  - MOVER es un joystick analogico flotante: se toca en cualquier parte del tercio
- *    izquierdo y el joystick aparece bajo el dedo. Se puede deslizar sin levantarlo, y el
- *    eje X activa izquierda/derecha y el eje Y activa el apuntado arriba/abajo del original.
- *  - Los botones de accion son grandes y estan agrupados donde llega el pulgar derecho.
- *  - Todo se puede arrastrar con un dedo mantenido (modo edicion), sin tocar ficheros.
- *  - El tamano se ajusta a la pantalla: en pantallas grandes los botones crecen.
- *  - El boton DEBUG abre el panel de trucos (municion infinita, vidas infinitas...).
+ *  - Cruceta/stick flotante y botones admiten multitouch para moverse y actuar a la vez.
+ *  - Las acciones mantienen sus teclas de juego y tambien se aplican directamente al jugador.
+ *  - DBG abre el panel de depuracion; el overlay puede ocultarse desde las opciones.
+ *  - Modo edicion y restauracion de la disposicion permanecen disponibles.
  *
  * (c) 2026 - Port de Android, misma licencia que el resto del codigo (MIT).
  **/
@@ -49,8 +33,16 @@
  */
 class TouchControlsClass {
   public:
+    enum class VirtualAction {
+        MOVE_LEFT, MOVE_RIGHT, DUCK, LOOK_UP, LOOK_DOWN,
+        JUMP, FIRE, BLITZ, POWERLINE, GRENADE, SMARTBOMB, CYCLE_WEAPON
+    };
+
     void Init();                     ///< Lee la deteccion de pantalla tactil y ajustes
     void Shutdown();                 ///< Libera el estado
+    void HandleTouchEvent(const SDL_TouchFingerEvent &event);
+    void CancelTouches();
+    bool IsActionPressed(VirtualAction action) const;
     void Update(const SDL_Rect &screen_rect, int window_w, int window_h);
     void DrawGeometry(const SDL_Rect &screen_rect);
 
@@ -108,13 +100,12 @@ class TouchControlsClass {
     };
 
     struct ActionButton {
-        float x, y;          ///< centro, normalizado (0..1) dentro del area de juego
+        float x, y;          ///< centro, normalizado (0..1) respecto a la ventana completa
         float r;             ///< radio, normalizado respecto a la ALTURA de la pantalla
         int scancode;        ///< tecla que se pulsa al tocarlo
         bool is_toggle;      ///< no escribe tecla cada frame, solo avisa al pulsar
         bool pressed;
         int finger;          ///< dedo que lo esta pulsando (-1 = ninguno)
-        const char *label;   ///< texto corto que se dibuja dentro
     };
 
     void ClearKeys();
@@ -122,7 +113,8 @@ class TouchControlsClass {
     void UpdateJoystick();
     void UpdateEditing(const SDL_TouchFingerEvent &finger, const SDL_Rect &screen_rect, int win_w,
                        int win_h);
-    void ApplyLayoutPersist();
+    void LoadLayout();
+    void SaveLayout() const;
 
     bool available = false;  ///< el dispositivo tiene pantalla tactil
     bool enabled = true;     ///< el jugador quiere el mando virtual
@@ -135,15 +127,15 @@ class TouchControlsClass {
 
     /// Joystick flotante de movimiento.
     bool stick_active = false;
-    int stick_finger = -1;
+    SDL_FingerID stick_finger = -1;
     float stick_origin_x = 0.0f;  ///< centro cuando se toco (pixeles)
     float stick_origin_y = 0.0f;
     float stick_x = 0.0f;  ///< desplazamiento actual del pomo (pixeles)
     float stick_y = 0.0f;
-    float stick_radius = 0.0f;  ///< radio en pixeles (depende de la pantalla)
-    /// Zona donde puede nacer el joystick, normalizada.
+    float stick_radius = 0.0f;  ///< zona analógica flotante, en pixeles
+    bool dpad_pressed[4] = {false, false, false, false};
+    /// Zona izquierda donde puede nacer el joystick flotante, normalizada.
     float stick_zone_w = 0.42f;
-    float stick_zone_h = 0.75f;
 
     ActionButton actions[ACT_COUNT];
     std::vector<int> pressed_scancodes;
@@ -151,18 +143,21 @@ class TouchControlsClass {
     /// Control que se esta arrastrando en modo edicion.
     int drag_action = -1;
     bool drag_stick = false;
+    SDL_TouchID drag_touch_id = 0;
+    SDL_FingerID drag_finger_id = -1;
     float drag_off_x = 0.0f;
     float drag_off_y = 0.0f;
     /// Ultima posicion conocida de cada dedo, para detectar arrastres.
     struct FingerState {
+        SDL_TouchID touch_id;
         SDL_FingerID id;
         float x, y;
     };
     std::vector<FingerState> fingers;
 
     /// Posicion por defecto del joystick (centro), normalizada.
-    float stick_default_x = 0.17f;
-    float stick_default_y = 0.74f;
+    float stick_default_x = 0.173f;
+    float stick_default_y = 0.741f;
 };
 
 extern TouchControlsClass TouchControls;

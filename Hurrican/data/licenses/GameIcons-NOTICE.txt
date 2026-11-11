@@ -1,0 +1,15 @@
+Touch-control action icons: game-icons.net (https://game-icons.net/),
+Creative Commons Attribution 3.0 Unported (CC BY 3.0):
+https://creativecommons.org/licenses/by/3.0/
+
+Jump: jump-across by Delapouite; Fire: crosshair by Delapouite;
+Blitz: run by Lorc; Powerline: power-lightning by Lorc;
+Grenade: grenade by Lorc; Smartbomb: unlit-bomb by Lorc;
+Weapon: rifle by Sbed; Pause: pause-button by Guard13007.
+
+Source: https://github.com/game-icons/icons, commit
+82d948812bfe3f269ef8f731dcdb07b08160edc4.
+Changes: original black backgrounds removed, symbols recolored and rendered
+at 128x128 pixels. Authors do not endorse this game or adaptation.
+The tactical metallic button shell was generated for this project. The debug
+icon is from Lucide; see Lucide-LICENSE.txt.
