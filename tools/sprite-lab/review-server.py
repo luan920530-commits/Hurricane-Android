@@ -25,6 +25,8 @@ class ReviewHandler(SimpleHTTPRequestHandler):
                 '/Hurrican/data/textures/s_Jungle.png',
                 '/Hurrican/data/textures/p1_hurri_laufen.png',
             }
+            for icon in ('jump', 'fire', 'blitz', 'powerline', 'grenade', 'smartbomb', 'weapon', 'pause', 'debug'):
+                allowed.add(f'/Hurrican/data/textures/touch_lucide_{icon}.png')
             for operator in ('male', 'female'):
                 allowed.add(f'/tools/sprite-lab/sheets/run-study/{operator}-run-4f-70x80.png')
                 allowed.add(f'/tools/sprite-lab/sheets/run-study/candidates/{operator}-recovery-70x80.png')

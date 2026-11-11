@@ -78,8 +78,8 @@ const ActionDef ACTIONS[] = {
 
 constexpr int ACTION_COUNT = sizeof(ACTIONS) / sizeof(ACTIONS[0]);
 
-// Iconos cargados desde data/textures. Se usan las versiones v2 proporcionadas para las
-// acciones disponibles; Blitz y Powerline conservan sus iconos previos porque no se subio v2.
+// Iconos Lucide (ISC/MIT): fuentes y licencias en tools/touch-ui/lucide.
+// Los iconos anteriores se conservan en data/textures; el fallback vectorial sigue activo.
 struct ActionIconDef {
     const char *filename;
     uint16_t texture_w, texture_h;
@@ -88,15 +88,15 @@ struct ActionIconDef {
 };
 
 const ActionIconDef ACTION_ICONS[ACTION_COUNT] = {
-    {"touch_salto_v2.png", 181, 177, 181, 177, 1, 1},     // salto
-    {"touch_fuego_v2.png", 179, 180, 179, 180, 1, 1},     // disparo
-    {"touch_blitz.png", 166, 170, 166, 170, 1, 1},        // Blitz (sin v2)
-    {"touch_powerline.png", 166, 169, 166, 169, 1, 1},    // rayo / Powerline (sin v2)
-    {"touch_granada_v2.png", 175, 172, 175, 172, 1, 1},   // granada
-    {"touch_bomba_v2.png", 177, 174, 177, 174, 1, 1},     // bomba inteligente
-    {"touch_arma_v2.png", 178, 179, 178, 179, 1, 1},      // cambiar arma
-    {"touch_pausa_v2.png", 167, 166, 167, 166, 1, 1},    // pausa
-    {"touch_ajustes_v2.png", 180, 176, 180, 176, 1, 1},  // ajustes
+    {"touch_lucide_jump.png", 128, 128, 128, 128, 1, 1},       // salto
+    {"touch_lucide_fire.png", 128, 128, 128, 128, 1, 1},       // disparo
+    {"touch_lucide_blitz.png", 128, 128, 128, 128, 1, 1},      // blitz
+    {"touch_lucide_powerline.png", 128, 128, 128, 128, 1, 1},  // powerline
+    {"touch_lucide_grenade.png", 128, 128, 128, 128, 1, 1},    // granada
+    {"touch_lucide_smartbomb.png", 128, 128, 128, 128, 1, 1},  // bomba inteligente
+    {"touch_lucide_weapon.png", 128, 128, 128, 128, 1, 1},     // cambiar arma
+    {"touch_lucide_pause.png", 128, 128, 128, 128, 1, 1},      // pausa
+    {"touch_lucide_debug.png", 128, 128, 128, 128, 1, 1},      // depuracion
 };
 
 DirectGraphicsSprite g_action_icons[ACTION_COUNT];

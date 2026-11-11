@@ -52,8 +52,9 @@ namespace {
 /// Subir este numero cada vez que cambien los datos empaquetados en assets/ o la forma de
 /// copiarlos. La version 4 actualizo los textos/creditos, la version 5 cambia los iconos
 /// tactiles a los recursos v2 y la version 6 incorpora las hojas vectoriales del personaje
-/// femenino; cada cambio fuerza a las instalaciones existentes a recopiarlas.
-constexpr const char *ANDROID_ASSET_VERSION = "6";
+/// femenino. La version 7 incorpora los iconos tactiles Lucide; cada cambio fuerza a las
+/// instalaciones existentes a recopiarlos.
+constexpr const char *ANDROID_ASSET_VERSION = "7";
 
 constexpr const char *LOG_TAG = "Hurrican";
 
