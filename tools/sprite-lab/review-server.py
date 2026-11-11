@@ -29,6 +29,7 @@ class ReviewHandler(SimpleHTTPRequestHandler):
                 allowed.add(f'/tools/sprite-lab/sheets/run-study/{operator}-run-4f-70x80.png')
                 allowed.add(f'/tools/sprite-lab/sheets/run-study/candidates/{operator}-recovery-70x80.png')
                 allowed.add(f'/tools/sprite-lab/sheets/run-study/candidates/{operator}-phase08-70x80.png')
+                allowed.add(f'/tools/sprite-lab/experiments/rigging/{operator}-experimental-5x4.png')
             if self.path not in allowed:
                 self.send_error(404)
                 return
