@@ -27,6 +27,8 @@ class ReviewHandler(SimpleHTTPRequestHandler):
             }
             for icon in ('jump', 'fire', 'blitz', 'powerline', 'grenade', 'smartbomb', 'weapon', 'pause', 'debug'):
                 allowed.add(f'/Hurrican/data/textures/touch_lucide_{icon}.png')
+            for icon in ('shell', 'jump', 'fire', 'blitz', 'powerline', 'grenade', 'smartbomb', 'weapon', 'pause'):
+                allowed.add(f'/tools/touch-ui/concepts/rendered/{icon}.png')
             for operator in ('male', 'female'):
                 allowed.add(f'/tools/sprite-lab/sheets/run-study/{operator}-run-4f-70x80.png')
                 allowed.add(f'/tools/sprite-lab/sheets/run-study/candidates/{operator}-recovery-70x80.png')
