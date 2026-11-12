@@ -257,6 +257,33 @@ void TouchControlsClass::UpdateEditing(const SDL_TouchFingerEvent &finger, const
     }
 }
 
+void TouchControlsClass::ReleaseAll() {
+    if (TastaturPuffer != nullptr) {
+        for (auto sc : pressed_scancodes) {
+            if (sc > 0 && sc < MAX_KEYS)
+                const_cast<Uint8 *>(TastaturPuffer)[sc] = 0;
+        }
+
+        // El joystick marca las cuatro direcciones; se sueltan explicitamente para no
+        // depender de que pressed_scancodes este al dia.
+        const int direcciones[4] = {SDL_SCANCODE_LEFT, SDL_SCANCODE_RIGHT, SDL_SCANCODE_UP, SDL_SCANCODE_DOWN};
+        for (const int sc : direcciones) {
+            if (sc > 0 && sc < MAX_KEYS)
+                const_cast<Uint8 *>(TastaturPuffer)[sc] = 0;
+        }
+    }
+
+    pressed_scancodes.clear();
+    for (int i = 0; i < ACTION_COUNT; i++) {
+        actions[i].pressed = false;
+        actions[i].finger = -1;
+    }
+
+    stick_active = false;
+    stick_finger = -1;
+    stick_x = stick_y = 0.0f;
+}
+
 void TouchControlsClass::Update(const SDL_Rect &screen_rect, int win_w, int win_h) {
     if (!g_initialised || !active || TastaturPuffer == nullptr)
         return;

@@ -51,6 +51,15 @@ class TouchControlsClass {
   public:
     void Init();                     ///< Lee la deteccion de pantalla tactil y ajustes
     void Shutdown();                 ///< Libera el estado
+
+    /**
+     * Suelta todas las teclas y el joystick.
+     *
+     * Hace falta cuando el juego deja de leer el mando: al abrir el panel, al salir de la
+     * app o al entrar en pausa automatica. Si no, la tecla de disparar se queda marcada en
+     * el buffer y el personaje sigue disparando solo (o andando) cuando se vuelve al juego.
+     */
+    void ReleaseAll();
     void Update(const SDL_Rect &screen_rect, int window_w, int window_h);
     void DrawGeometry(const SDL_Rect &screen_rect);
 

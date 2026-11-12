@@ -101,13 +101,7 @@ void DebugPanelClass::SetOpen(bool open) {
      * jugador se queda andando o disparando solo mientras navega por los interruptores.
      */
     if (open_) {
-        if (TastaturPuffer != nullptr) {
-            const_cast<Uint8 *>(TastaturPuffer)[SDL_SCANCODE_LEFT] = 0;
-            const_cast<Uint8 *>(TastaturPuffer)[SDL_SCANCODE_RIGHT] = 0;
-            const_cast<Uint8 *>(TastaturPuffer)[SDL_SCANCODE_UP] = 0;
-            const_cast<Uint8 *>(TastaturPuffer)[SDL_SCANCODE_DOWN] = 0;
-            const_cast<Uint8 *>(TastaturPuffer)[SDL_SCANCODE_LCTRL] = 0;
-        }
+        TouchControls.ReleaseAll();
     }
 
     Protokoll << "Panel de depuracion: " << (open_ ? "abierto" : "cerrado") << std::endl;

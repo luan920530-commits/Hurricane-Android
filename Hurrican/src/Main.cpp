@@ -512,6 +512,31 @@ int main(int argc, char *argv[]) {
                 case SDL_APP_WILLENTERBACKGROUND:
                     Protokoll << "Android: la app pasa a segundo plano, en pausa" << std::endl;
                     GamePaused = true;
+
+                    /*
+                     * Al salir de la app (WhatsApp, llamada, bloquear el movil) el juego se
+                     * congelaba, pero al volver seguia exactamente igual: el jugador
+                     * reaparecia en mitad de un tiroteo, con el enemigo al lado y el dedo
+                     * fuera de la pantalla. En un juego de accion de movil eso es una vida
+                     * perdida gratis.
+                     *
+                     * Si estaba en una partida, se deja el motor en el menu con "Continuar
+                     * partida" seleccionado (es justo lo que hace LeaveGameLoop(), el mismo
+                     * camino que la tecla de pausa). La partida NO se pierde: el estado de
+                     * los jugadores se queda donde estaba.
+                     */
+                    if (SpielZustand == GameStateEnum::GAMELOOP) {
+                        Protokoll << "Android: pausa automatica de la partida al salir" << std::endl;
+                        LeaveGameLoop();
+                    }
+
+                    /*
+                     * Los dedos que estuvieran pulsados ya no existen (Android no manda el
+                     * FINGERUP si el dedo se va con la app a segundo plano), asi que se
+                     * sueltan aqui. Sin esto, al volver el personaje seguia disparando.
+                     */
+                    TouchControls.ReleaseAll();
+
                     SoundManager.PauseSongs();
                     SoundManager.PauseSounds();
                     break;
@@ -519,6 +544,10 @@ int main(int argc, char *argv[]) {
                     Protokoll << "Android: la app vuelve al primer plano" << std::endl;
                     SoundManager.UnpauseSongs();
                     SoundManager.UnpauseSounds();
+                    /*
+                     * Se reanuda el bucle. Si se habia salido de una partida, el menu tiene
+                     * "Continuar partida" seleccionado y el jugador decide cuando seguir.
+                     */
                     GamePaused = false;
                     break;
                 /*
