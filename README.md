@@ -183,6 +183,10 @@ Detalles pensados para jugar de verdad:
   donde quieras; se queda así hasta cerrar la app.
 - Si se conecta un gamepad Bluetooth, ambos siguen activos.
 
+Si sales de la app (llamada, WhatsApp, bloquear el móvil) con una partida en marcha, el juego
+vuelve al menú con **Continuar partida** seleccionado: no se pierde nada y no reapareces en
+mitad de un tiroteo. Los dedos que estuvieran pulsados se sueltan solos.
+
 Los ajustes del juego se guardan en `save/Hurrican.cfg` y sobreviven a las actualizaciones.
 
 ---
@@ -199,6 +203,7 @@ El botón **DBG** (arriba a la derecha) abre un panel para probar el port sin te
 | Invulnerable | `GodMode` del motor: no recibe daño |
 | Mostrar FPS | contador de fotogramas |
 | Editar controles | arrastrar botones y joystick |
+| Calidad de imagen | *Nítido* / *Suave* / *Máximo* (ver abajo) |
 
 Los trucos **no se guardan**: duran mientras la app está abierta, para no quedarse activados sin
 querer en una partida normal. Se aplican una vez por fotograma desde `Heartbeat()`, así que
@@ -206,6 +211,29 @@ también funcionan al cambiar de nivel.
 
 El panel **pausa el overlay**: mientras está abierto el mando virtual no mueve al personaje, y
 un toque fuera del panel lo cierra.
+
+---
+
+## Calidad de imagen (texturas y letras)
+
+El juego se diseñó para 640×480 y se estira a la pantalla del móvil. Ese estirado decide casi
+toda la nitidez que se ve, así que no se hace con una muestra y filtro lineal, sino con un
+shader propio (`data/shaders/{100,320}/shader_upscale.frag`) con tres calidades:
+
+| Calidad | Qué hace | Cuándo |
+|---|---|---|
+| Nítido | vecino más cercano: píxeles perfectos | pantallas pequeñas o poco potentes |
+| Suave | escalado de calidad (tipo xBR/ScaleHQ); respeta las zonas planas | **por defecto**, escala 1.5×–2.6× |
+| Máximo | calidad + muestras extra contra el parpadeo al moverse | pantallas grandes (≥2.6×) |
+
+- Se elige **automáticamente** según la escala real de la pantalla (se recalcula al volver del
+  segundo plano o si cambia la resolución).
+- Se puede forzar con `--upscale 0|1|2` o cambiarla en caliente desde la fila *Calidad de
+  imagen* del panel DBG, sin reiniciar.
+- Si un driver no compila el shader, el juego sigue con el filtro lineal de siempre: nunca se
+  queda sin imagen por esto.
+- Las texturas y los datos originales **no se modifican**: la mejora es del escalado, no de
+  repintar el arte de 1997.
 
 ---
 
@@ -330,3 +358,7 @@ El código original es **MIT** según `README.txt` del repositorio de origen. Lo
 juego son *freeware*: se pueden distribuir libremente siempre que se mantengan sin modificar
 y se acredite al autor; **no se puede vender**. Este port respeta esas condiciones y no
 incluye ningún cambio en los datos originales.
+
+---
+
+Qué falta y en qué orden está en [ROADMAP.md](ROADMAP.md).

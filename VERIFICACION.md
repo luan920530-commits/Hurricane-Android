@@ -46,7 +46,8 @@ Los 18 ficheros modificados y por qué:
 | Configuración de CMake de SDL2 / SDL2_image / SDL2_mixer / libxmp | se genera y se compila en local (Linux): SDL2_mixer con libxmp estático enlaza |
 | Mando virtual | zonas sin solape, dentro de pantalla, multitáctil |
 | Teclas del mando contra los controles por defecto del motor (`Gameplay.cpp`) | coinciden |
-| Coherencia de `data/` con lo que espera el motor (`data/levels`, `data/music`, `data/sfx`, `data/textures`, `data/shaders/100`) | correcta |
+| Shaders (CI, `.github/scripts/check_shaders.py`) | 18 ficheros: constantes `c_...` que el motor inyecta, GLSL 100 vs 320, llaves y paréntesis |
+| Shaders dentro de la APK (CI, `check_apk.py`) | los cuatro programas del juego y el de escalado |
 
 ## Sin verificar (necesita un dispositivo)
 
@@ -54,6 +55,8 @@ Los 18 ficheros modificados y por qué:
    verificada; ejecutarlo en un móvil, no.
 2. **El mando táctil en pantalla**: posiciones cómodas con el pulgar, tamaño de los botones.
    El modo edición del panel DBG permite recolocarlos sin recompilar.
+7. **La calidad de imagen nueva**: que el shader de escalado compile en el móvil y cuál de las
+   tres calidades se ve mejor (se cambia en caliente desde el panel DBG).
 3. **La música `.it`** a través de libxmp.
 4. **El ciclo pausa/reanudación**: minimizar, volver, y comprobar en `logcat` si aparece
    "contexto grafico perdido, reconstruyendo".
