@@ -126,6 +126,7 @@ void FillCommandLineParams(int argc, char *args[]) {
     CommandLineParams.ColorBleed = false;
     CommandLineParams.ScreenCurvature = false;
     CommandLineParams.ScreenNoise = false;
+    CommandLineParams.Upscale = -1;
     CommandLineParams.TexFactor = 1;
     CommandLineParams.TexSizeMin = 1024;
     CommandLineParams.ScreenDepth = DEFAULT_SCREENBPP;
@@ -278,6 +279,17 @@ void FillCommandLineParams(int argc, char *args[]) {
         } else if (strstr(args[i], "--screennoise") != nullptr) {
             Protokoll << "CRT screen noise enabled" << std::endl;
             CommandLineParams.ScreenNoise = true;
+        } else if (strstr(args[i], "--upscale") != nullptr) {
+            /*
+             * Calidad del escalado final: --upscale 0 (nitido), 1 (suave) o 2 (maximo).
+             * Es lo que decide la nitidez con la que se ven las texturas originales en la
+             * pantalla del movil; vease data/shaders/100/shader_upscale.frag.
+             */
+            i++;
+            if (i < argc) {
+                CommandLineParams.Upscale = std::clamp(atoi(args[i]), 0, 2);
+                Protokoll << "Upscale quality set to " << CommandLineParams.Upscale << std::endl;
+            }
         } else if (strstr(args[i], "--custom") != nullptr) {
             i++;
             if (i < argc && strlen(args[i]) < 256) {

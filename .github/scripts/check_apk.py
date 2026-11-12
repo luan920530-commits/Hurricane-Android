@@ -65,6 +65,21 @@ def main():
         )
     if not indice:
         problemas.append("falta hurrican_index.txt (la copia de datos en el movil no funcionaria)")
+
+    # Shaders: sin ellos el motor no dibuja nada (ni juego ni escalado). Es barato
+    # comprobar que los cuatro programas y el escalado van dentro del APK.
+    shaders_requeridos = [
+        "assets/data/shaders/100/shader_color.vert",
+        "assets/data/shaders/100/shader_texture.frag",
+        "assets/data/shaders/100/shader_render.frag",
+        "assets/data/shaders/100/shader_upscale.vert",
+        "assets/data/shaders/100/shader_upscale.frag",
+    ]
+    faltan_shaders = [sh for sh in shaders_requeridos if sh not in nombres]
+    if faltan_shaders:
+        problemas.append("faltan shaders en la APK: " + ", ".join(faltan_shaders))
+    else:
+        print("Shaders: los programas del juego y el escalado estan en la APK")
     if not any(l.endswith("/libmain.so") for l in librerias):
         problemas.append("falta lib/libmain.so (el juego no arrancaria)")
 

@@ -40,7 +40,7 @@ DebugPanelClass DebugPanel;
 
 namespace {
 
-constexpr int OPT_COUNT = 6;
+constexpr int OPT_COUNT = 7;
 
 enum OptionId {
     OPT_LIVES = 0,
@@ -49,12 +49,20 @@ enum OptionId {
     OPT_GODMODE,
     OPT_FPS,
     OPT_EDIT,
+    OPT_UPSCALE,
 };
 
 struct Option {
     const char *label;
     bool *value;
 };
+
+/*
+ * Calidades de escalado, en el mismo orden que el shader (vease shader_upscale.frag):
+ *   0 nitido, 1 suave, 2 maximo.
+ * El interruptor de la ultima fila recorre las tres.
+ */
+const char *const UPSCALE_LABELS[] = {"Nitido", "Suave", "Maximo"};
 
 /// Niveles "de verdad" del motor: por encima de esto hay armas especiales que no se pueden
 /// activar sin el power-up correspondiente, asi que el truco deja las armas al 8.
@@ -232,6 +240,15 @@ bool DebugPanelClass::HandleTouch(float nx, float ny, bool down, const SDL_Rect 
             case OPT_EDIT:
                 TouchControls.ToggleEditing();
                 break;
+            case OPT_UPSCALE: {
+                /*
+                 * Recorre las tres calidades. Se hace en caliente (recompila un shader
+                 * pequeno) para poder comparar el aspecto sin reiniciar el juego.
+                 */
+                const int siguiente = (DirectGraphics.GetUpscale() + 1) % 3;
+                DirectGraphics.SetUpscale(siguiente);
+                Protokoll << "Escalado cambiado a " << UPSCALE_LABELS[siguiente] << std::endl;
+            } break;
             default:
                 break;
         }
@@ -281,6 +298,8 @@ void DebugPanelClass::Draw(const SDL_Rect &screen_rect) {
         {"Invulnerable", &GodMode_},
         {"Mostrar FPS", &CommandLineParams.ShowFPS},
         {"Editar controles", nullptr},
+        /* El estado de esta fila se dibuja aparte: no es un booleano sino 3 calidades. */
+        {"Calidad de imagen", nullptr},
     };
 
     for (int i = 0; i < OPT_COUNT; i++) {
@@ -290,17 +309,39 @@ void DebugPanelClass::Draw(const SDL_Rect &screen_rect) {
         quad(SDL_FRect{panel.x + alto_fila * 0.15f, y, panel.w - alto_fila * 0.30f, alto_fila * 0.88f},
              (i % 2 == 0) ? 0x30FFFFFF : 0x1CFFFFFF);
 
-        // Interruptor.
-        const bool on = options[i].value != nullptr ? *options[i].value : TouchControls.IsEditing();
-        const std::uint32_t color = on ? 0xFF50E070 : 0xFF505A68;
-        const float lado = alto_fila * 0.52f;
-        quad(SDL_FRect{panel.x + panel.w - alto_fila * 1.10f, y + (alto_fila - lado) * 0.5f, lado, lado},
-             color);
+        /*
+         * Interruptor. La fila de calidad de imagen no es un interruptor, sino un selector de
+         * tres estados: se dibujan tres marcas y se resalta la activa.
+         */
+        bool on = false;
 
-        // Etiqueta: el motor no puede dibujar texto sin fuente cargada, asi que se marca el
-        // numero de fila y el panel se documenta en la ayuda del boton DBG. Para que sea
-        // legible de un vistazo, las filas activadas llevan una barra ancha y las apagadas
-        // una fina.
+        if (i == OPT_UPSCALE) {
+            /*
+             * No es un interruptor, sino un selector de tres estados: se dibujan tres marcas
+             * (nitido / suave / maximo) y se resalta la activa.
+             */
+            const int actual = DirectGraphics.GetUpscale();
+            on = (actual > 0);
+            const float lado = alto_fila * 0.42f;
+            for (int q = 0; q < 3; q++) {
+                const float x = panel.x + panel.w - alto_fila * (1.10f + (2 - q) * 0.60f);
+                quad(SDL_FRect{x, y + (alto_fila - lado) * 0.5f, lado, lado},
+                     (q == actual) ? 0xFF50E070 : 0xFF505A68);
+            }
+        } else {
+            on = options[i].value != nullptr ? *options[i].value : TouchControls.IsEditing();
+            const std::uint32_t color = on ? 0xFF50E070 : 0xFF505A68;
+            const float lado = alto_fila * 0.52f;
+            quad(SDL_FRect{panel.x + panel.w - alto_fila * 1.10f, y + (alto_fila - lado) * 0.5f, lado, lado},
+                 color);
+        }
+
+        /*
+         * Etiqueta: el motor no puede dibujar texto sin fuente cargada, asi que se marca el
+         * numero de fila y el panel se documenta en la ayuda del boton DBG. Para que sea
+         * legible de un vistazo, las filas activadas llevan una barra ancha y las apagadas
+         * una fina.
+         */
         quad(SDL_FRect{panel.x + alto_fila * 0.35f, y + alto_fila * 0.32f,
                        panel.w * (on ? 0.40f : 0.18f), alto_fila * 0.26f},
              on ? 0xC0FFFFFF : 0x60FFFFFF);

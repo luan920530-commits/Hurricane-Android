@@ -36,7 +36,12 @@ enum class BlendModeEnum {
 };
 
 #if defined(USE_GL2) || defined(USE_GL3)
-enum { PROGRAM_COLOR = 0, PROGRAM_TEXTURE, PROGRAM_RENDER, PROGRAM_TOTAL, PROGRAM_NONE };
+/*
+ * PROGRAM_UPSCALE es el programa que escala el framebuffer interno (640x480) a la pantalla.
+ * Se anade al final para no cambiar el valor de los existentes (estan grabados en el codigo
+ * como constantes y en algunas comprobaciones).
+ */
+enum { PROGRAM_COLOR = 0, PROGRAM_TEXTURE, PROGRAM_RENDER, PROGRAM_UPSCALE, PROGRAM_TOTAL, PROGRAM_NONE };
 #endif
 
 // --------------------------------------------------------------------------------------
@@ -69,12 +74,17 @@ struct QUAD2D {
 
 class DirectGraphicsClass {
   private:
-    enum class shader_t {COLOR, TEXTURE, RENDER};
+    enum class shader_t {COLOR, TEXTURE, RENDER, UPSCALE};
 
   private:
     bool VSyncEnabled;  // VSync ein/aus ?
     bool FilterMode;    // Linearer Filter an/aus?
     bool CrtEnabled;
+    /*
+     * true si el shader de escalado (shader_upscale) se compilo bien. Si un driver no lo
+     * acepta, se usa el filtro lineal de siempre en vez de fallar.
+     */
+    bool UpscaleAvailable;
     const char *glextensions;
     shader_t use_shader;
     BlendModeEnum BlendMode;  // Additiv, Colorkey oder White mode aktiviert?
@@ -84,6 +94,8 @@ class DirectGraphicsClass {
 #if defined(USE_GL2) || defined(USE_GL3)
     GLuint ProgramCurrent;
     GLuint NameTime;
+    /* Localizacion de u_Time en el programa de escalado (solo si hay ruido de pantalla). */
+    GLint NameTimeUpscale;
     CShader Shaders[PROGRAM_TOTAL];
 #endif
     glm::mat4x4 matProjWindow;
@@ -163,6 +175,14 @@ class DirectGraphicsClass {
 #endif
 
     inline BlendModeEnum GetBlendMode() const { return BlendMode; }
+
+    /*
+     * Calidad del escalado final (0 nitido, 1 suave, 2 maximo). Cambiarla no recompila nada:
+     * recompila el programa con otra constante para que el efecto sea inmediato.
+     */
+    void SetUpscale(int quality);
+    int GetUpscale() const;
+    inline bool IsUpscaleAvailable() const { return UpscaleAvailable; }
     inline bool IsETC1Supported() const { return SupportedETC1; }
     inline bool IsPVRTCSupported() const { return SupportedPVRTC; }
 

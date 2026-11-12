@@ -32,6 +32,13 @@ struct sCommandLineParams {
     bool ColorBleed;
     bool ScreenCurvature;
     bool ScreenNoise;
+    /*
+     * Calidad del escalado del fotograma a la pantalla (llamado "upscale" en el codigo):
+     *   0 = nitido (vecino mas cercano), 1 = suave (por defecto), 2 = maximo.
+     * -1 significa "no lo ha pedido el usuario": en Android se elige automaticamente segun la
+     * pantalla. Vease shader_upscale.frag.
+     */
+    int Upscale;
     char UserLevelName[256];
     char OwnLevelList[256];
     char Params[256];

@@ -89,6 +89,13 @@ jobs:
       - name: Comprobar que todos los #include apuntan a ficheros del repositorio
         run: python3 .github/scripts/check_includes.py .
 
+      # Los shaders se compilan en el movil, no aqui: un error en un shader no se ve hasta
+      # ejecutar el juego. Esta comprobacion (segundos) detecta lo mas tipico: usar una
+      # constante `c_...` que el motor no inyecta, mezclar GLSL 100 con 320, o desbalancear
+      # llaves al editarlos.
+      - name: Comprobar los shaders
+        run: python3 .github/scripts/check_shaders.py .
+
       - name: Instalar JDK 17
         uses: actions/setup-java@v4
         with:

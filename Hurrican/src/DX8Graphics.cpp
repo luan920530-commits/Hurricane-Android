@@ -60,6 +60,8 @@ DirectGraphicsClass::DirectGraphicsClass() {
     SupportedETC1 = false;
     SupportedPVRTC = false;
     use_shader = shader_t::COLOR;
+    UpscaleAvailable = false;
+    NameTimeUpscale = -1;
 
 #if defined(USE_GL2) || defined(USE_GL3)
     ProgramCurrent = PROGRAM_NONE;
@@ -337,6 +339,7 @@ bool DirectGraphicsClass::Exit() {
     Shaders[PROGRAM_COLOR].Close();
     Shaders[PROGRAM_TEXTURE].Close();
     Shaders[PROGRAM_RENDER].Close();
+    Shaders[PROGRAM_UPSCALE].Close();
 #if (defined(USE_GL2) || defined(USE_GL3)) && defined(USE_FBO)
     RenderBuffer.Close();
 #endif /* USE_FBO */
@@ -441,6 +444,7 @@ bool DirectGraphicsClass::SetDeviceInfo() {
 #if defined(USE_GL2) || defined(USE_GL3)
     std::string vert;
     std::string frag;
+
 #if defined(USE_GL3)
     const char* glsl_version = "320";
 #else /* USE_GL2 */
@@ -449,6 +453,37 @@ bool DirectGraphicsClass::SetDeviceInfo() {
 #endif
 
     SetupFramebuffers();
+
+#if defined(USE_GL2) || defined(USE_GL3)
+    /*
+     * Calidad de escalado automatica.
+     *
+     * El juego se disena a 640x480. En una pantalla de movil (entre 2x y 4x) el filtro
+     * lineal de siempre emborrona los bordes de los sprites y las letras; el vecino mas
+     * cercano deja los pixeles duros pero del tamano correcto. Se elige segun cuanto haya
+     * que estirar, que es lo que determina cual de los dos se ve mejor:
+     *
+     *   escala < 1.5  -> nitido (0): apenas se estira, no hay bordes que suavizar
+     *   escala < 2.6  -> suave (1) : escalado de calidad
+     *   escala >= 2.6 -> maximo (2): mucho estirado, hace falta quitar el parpadeo
+     *
+     * Se recalcula en cada llamada (tambien al volver de segundo plano o al rotar), asi que
+     * un cambio de resolucion no deja la imagen como estaba.
+     */
+    if (CommandLineParams.Upscale < 0) {
+        const int alto = (RenderRect.h > 0) ? RenderRect.h : RENDERHEIGHT;
+        const float escala = static_cast<float>(alto) / static_cast<float>(RENDERHEIGHT);
+        if (escala < 1.5f)
+            CommandLineParams.Upscale = 0;
+        else if (escala < 2.6f)
+            CommandLineParams.Upscale = 1;
+        else
+            CommandLineParams.Upscale = 2;
+
+        Protokoll << "Escalado automatico: " << escala << "x -> calidad " << CommandLineParams.Upscale
+                  << std::endl;
+    }
+#endif /* USE_GL2 || USE_GL3 */
 
     /* OpenGL Information */
     Protokoll << "GL_VENDOR: " << glGetString(GL_VENDOR) << std::endl;
@@ -524,6 +559,41 @@ bool DirectGraphicsClass::SetDeviceInfo() {
         return false;
     }
 
+    /*
+     * Programa de escalado (vease shader_upscale.frag).
+     *
+     * El fotograma del juego se dibuja a 640x480 en un framebuffer y luego se estira a la
+     * pantalla del movil. Ese estirado es el que decide la nitidez final, y hacerlo con una
+     * sola muestra con filtro lineal deja los bordes sucios. Este programa hace el escalado
+     * de calidad; la calidad se elige con -Upscale / --upscale y se puede cambiar en
+     * caliente desde el panel de video (DirectGraphics.SetUpscale()).
+     */
+    vert = g_storage_ext + "/data/shaders/" + glsl_version + "/shader_upscale.vert";
+    frag = g_storage_ext + "/data/shaders/" + glsl_version + "/shader_upscale.frag";
+
+    Shaders[PROGRAM_UPSCALE].AddConstant("c_WindowWidth", RenderRect.w);
+    Shaders[PROGRAM_UPSCALE].AddConstant("c_WindowHeight", RenderRect.h);
+    Shaders[PROGRAM_UPSCALE].AddConstant("c_curvature", CommandLineParams.ScreenCurvature ? 1 : 0);
+    Shaders[PROGRAM_UPSCALE].AddConstant("c_color_bleed", CommandLineParams.ColorBleed ? 1 : 0);
+    Shaders[PROGRAM_UPSCALE].AddConstant("c_scanlines", CommandLineParams.Scanlines ? 1 : 0);
+    Shaders[PROGRAM_UPSCALE].AddConstant("c_noise", CommandLineParams.ScreenNoise ? 1 : 0);
+    Shaders[PROGRAM_UPSCALE].AddConstant("c_upscale",
+                                         CommandLineParams.Upscale >= 0 ? CommandLineParams.Upscale : 1);
+    Shaders[PROGRAM_UPSCALE].AddConstant("c_TexWidth", RenderView.w);
+    Shaders[PROGRAM_UPSCALE].AddConstant("c_TexHeight", RenderView.h);
+
+    if (!Shaders[PROGRAM_UPSCALE].Load(vert, frag)) {
+        /*
+         * No es un fallo fatal: si el shader no compila (un driver raro) se sigue con el
+         * escalado de siempre, que ya esta cargado.
+         */
+        Protokoll << "AVISO: no se pudo cargar el shader de escalado; se usa el filtro lineal"
+                  << std::endl;
+        UpscaleAvailable = false;
+    } else {
+        UpscaleAvailable = true;
+    }
+
     // Get names for attributes and uniforms
     Shaders[PROGRAM_COLOR].NamePos = Shaders[PROGRAM_COLOR].GetAttribute("a_Position");
     Shaders[PROGRAM_COLOR].NameClr = Shaders[PROGRAM_COLOR].GetAttribute("a_Color");
@@ -544,8 +614,17 @@ bool DirectGraphicsClass::SetDeviceInfo() {
     Shaders[PROGRAM_RENDER].NameClr = Shaders[PROGRAM_RENDER].GetAttribute("a_Color");
     Shaders[PROGRAM_RENDER].NameTex = Shaders[PROGRAM_RENDER].GetAttribute("a_Texcoord0");
     Shaders[PROGRAM_RENDER].NameMvp = Shaders[PROGRAM_RENDER].GetUniform("u_MVPMatrix");
-    if (CommandLineParams.ScreenNoise)
-        NameTime                    = Shaders[PROGRAM_RENDER].GetUniform("u_Time");
+    if (CommandLineParams.ScreenNoise) {
+        NameTime = Shaders[PROGRAM_RENDER].GetUniform("u_Time");
+        NameTimeUpscale = Shaders[PROGRAM_UPSCALE].GetUniform("u_Time");
+    }
+
+    if (UpscaleAvailable) {
+        Shaders[PROGRAM_UPSCALE].NamePos = Shaders[PROGRAM_UPSCALE].GetAttribute("a_Position");
+        Shaders[PROGRAM_UPSCALE].NameClr = Shaders[PROGRAM_UPSCALE].GetAttribute("a_Color");
+        Shaders[PROGRAM_UPSCALE].NameTex = Shaders[PROGRAM_UPSCALE].GetAttribute("a_Texcoord0");
+        Shaders[PROGRAM_UPSCALE].NameMvp = Shaders[PROGRAM_UPSCALE].GetUniform("u_MVPMatrix");
+    }
 #endif /* USE_GL2 || USE_GL3 */
 
     /* Matrices setup */
@@ -593,6 +672,70 @@ bool DirectGraphicsClass::TakeScreenshot(const char Filename[100], int screenx, 
 
 #endif
 }
+
+#if defined(USE_GL2) || defined(USE_GL3)
+/*
+ * Cambia la calidad del escalado final sin reiniciar el juego.
+ *
+ * La calidad viaja al shader como constante (c_upscale), que CShader inyecta en el codigo
+ * fuente antes de compilar, asi que hay que volver a compilar ese programa. Es un unico
+ * shader pequeno y solo ocurre cuando el jugador cambia la opcion, no cada fotograma.
+ */
+int DirectGraphicsClass::GetUpscale() const {
+    return CommandLineParams.Upscale;
+}
+
+void DirectGraphicsClass::SetUpscale(int quality) {
+    if (quality < 0)
+        quality = 0;
+    if (quality > 2)
+        quality = 2;
+
+    if (CommandLineParams.Upscale == quality)
+        return;
+
+    CommandLineParams.Upscale = quality;
+
+#if defined(USE_GL3)
+    const char *glsl_version = "320";
+#else
+    const char *glsl_version = "100";
+#endif
+
+    /* Mismo orden de constantes que en SetDeviceInfo(): se recompila el programa entero. */
+    CShader &shader = Shaders[PROGRAM_UPSCALE];
+    shader.Close();
+
+    shader.AddConstant("c_WindowWidth", RenderRect.w);
+    shader.AddConstant("c_WindowHeight", RenderRect.h);
+    shader.AddConstant("c_curvature", CommandLineParams.ScreenCurvature ? 1 : 0);
+    shader.AddConstant("c_color_bleed", CommandLineParams.ColorBleed ? 1 : 0);
+    shader.AddConstant("c_scanlines", CommandLineParams.Scanlines ? 1 : 0);
+    shader.AddConstant("c_noise", CommandLineParams.ScreenNoise ? 1 : 0);
+    shader.AddConstant("c_upscale", quality);
+    shader.AddConstant("c_TexWidth", RenderView.w);
+    shader.AddConstant("c_TexHeight", RenderView.h);
+
+    const std::string vert = g_storage_ext + "/data/shaders/" + glsl_version + "/shader_upscale.vert";
+    const std::string frag = g_storage_ext + "/data/shaders/" + glsl_version + "/shader_upscale.frag";
+
+    if (shader.Load(vert, frag)) {
+        shader.NamePos = shader.GetAttribute("a_Position");
+        shader.NameClr = shader.GetAttribute("a_Color");
+        shader.NameTex = shader.GetAttribute("a_Texcoord0");
+        shader.NameMvp = shader.GetUniform("u_MVPMatrix");
+        if (CommandLineParams.ScreenNoise)
+            NameTimeUpscale = shader.GetUniform("u_Time");
+        UpscaleAvailable = true;
+        ProgramCurrent = PROGRAM_NONE;  // forzar glUseProgram en el proximo dibujo
+        Protokoll << "Escalado: calidad " << quality << std::endl;
+    } else {
+        UpscaleAvailable = false;
+        ProgramCurrent = PROGRAM_NONE;
+        Protokoll << "AVISO: no se pudo recompilar el shader de escalado" << std::endl;
+    }
+}
+#endif /* USE_GL2 || USE_GL3 */
 
 // --------------------------------------------------------------------------------------
 // Renderstates für Sprites mit ColorKey setzen
@@ -667,6 +810,10 @@ void DirectGraphicsClass::RendertoBuffer(GLenum PrimitiveType,
         program_next = PROGRAM_RENDER;
         is_texture = true;
         break;
+    case shader_t::UPSCALE:
+        program_next = PROGRAM_UPSCALE;
+        is_texture = true;
+        break;
     default:
         program_next = PROGRAM_COLOR;
         is_texture = false;
@@ -675,8 +822,11 @@ void DirectGraphicsClass::RendertoBuffer(GLenum PrimitiveType,
     // Check if the program is already in use
     if (ProgramCurrent != program_next) {
         Shaders[program_next].Use();
-        if (CommandLineParams.ScreenNoise && (program_next==PROGRAM_RENDER)) {
-            glUniform1i(NameTime, 50*SDL_GetTicks()/1000);
+        if (CommandLineParams.ScreenNoise && (program_next == PROGRAM_RENDER)) {
+            glUniform1i(NameTime, 50 * SDL_GetTicks() / 1000);
+        }
+        if (CommandLineParams.ScreenNoise && (program_next == PROGRAM_UPSCALE)) {
+            glUniform1i(NameTimeUpscale, 50 * SDL_GetTicks() / 1000);
         }
         ProgramCurrent = program_next;
     }
@@ -883,7 +1033,19 @@ void DirectGraphicsClass::ShowBackBuffer() {
 
         SelectBuffer(false);
 
-        use_shader = CrtEnabled ? shader_t::RENDER : shader_t::TEXTURE;
+        /*
+         * Eleccion del programa que estira el fotograma a la pantalla:
+         *   - con CRT activado, shader_render (curvatura, scanlines, ruido...),
+         *   - si no, el escalado de calidad (shader_upscale) cuando esta disponible,
+         *   - y si el driver no lo compilo, el de textura de siempre.
+         */
+        if (CrtEnabled)
+            use_shader = shader_t::RENDER;
+        else if (UpscaleAvailable)
+            use_shader = shader_t::UPSCALE;
+        else
+            use_shader = shader_t::TEXTURE;
+
         RenderBuffer.BindTexture(true);
 
         RendertoBuffer(GL_TRIANGLE_STRIP, 2, &vertices[0]);
