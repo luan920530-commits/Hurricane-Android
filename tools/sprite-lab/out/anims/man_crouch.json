@@ -1,0 +1,107 @@
+{
+  "frames": {
+    "man_crouch_0": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 144,
+        "h": 164
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 144,
+        "h": 164
+      },
+      "sourceSize": {
+        "w": 144,
+        "h": 164
+      },
+      "duration": 167
+    },
+    "man_crouch_1": {
+      "frame": {
+        "x": 144,
+        "y": 0,
+        "w": 144,
+        "h": 164
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 144,
+        "h": 164
+      },
+      "sourceSize": {
+        "w": 144,
+        "h": 164
+      },
+      "duration": 167
+    },
+    "man_crouch_2": {
+      "frame": {
+        "x": 288,
+        "y": 0,
+        "w": 144,
+        "h": 164
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 144,
+        "h": 164
+      },
+      "sourceSize": {
+        "w": 144,
+        "h": 164
+      },
+      "duration": 167
+    },
+    "man_crouch_3": {
+      "frame": {
+        "x": 432,
+        "y": 0,
+        "w": 144,
+        "h": 164
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 144,
+        "h": 164
+      },
+      "sourceSize": {
+        "w": 144,
+        "h": 164
+      },
+      "duration": 167
+    }
+  },
+  "meta": {
+    "app": "vex",
+    "version": "0.1.0",
+    "image": "man_crouch.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 576,
+      "h": 164
+    },
+    "scale": "2",
+    "frameTags": [
+      {
+        "name": "man_crouch",
+        "from": 0,
+        "to": 3,
+        "direction": "forward"
+      }
+    ]
+  }
+}

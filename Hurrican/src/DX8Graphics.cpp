@@ -177,10 +177,10 @@ bool DirectGraphicsClass::Init(std::uint32_t dwBreite, std::uint32_t dwHoehe, st
     // Create a window. Window mode MUST include SDL_WINDOW_OPENGL for use with OpenGL.
 #if defined(ANDROID)
     /*
-     * En Android el tamano de la ventana lo pone el sistema (SDL_WINDOW_FULLSCREEN_DESKTOP),
-     * pero se sigue pasando 640x480 como tamano logico: el juego renderiza siempre a
-     * RENDERWIDTH x RENDERHEIGHT en el FBO y luego se escala al panel, asi que en pantallas
-     * 18:9 o 20:9 se veran bandas negras laterales en lugar de un juego deformado.
+     * En Android el tamano fisico de la ventana lo pone el sistema
+     * (SDL_WINDOW_FULLSCREEN_DESKTOP). El motor conserva su FBO logico de 640x480 y
+     * SetupFramebuffers lo escala al tamano real del panel; el modo Android por defecto
+     * ocupa toda la pantalla y se recalcula tras cada cambio de ventana/orientacion.
      */
     Window = SDL_CreateWindow("Hurrican", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, ScreenWidth,
                               ScreenHeight, flags);
@@ -1238,7 +1238,8 @@ void DirectGraphicsClass::DrawTouchControls() {
     const glm::mat4x4 saved_model_view = g_matModelView;
     g_matModelView = glm::mat4x4(1.0f);
 
-    TouchControls.DrawGeometry(RenderRect);
+    const SDL_Rect touch_area{0, 0, WindowView.w, WindowView.h};
+    TouchControls.DrawGeometry(touch_area);
 
     g_matModelView = saved_model_view;
 }

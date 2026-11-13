@@ -43,6 +43,8 @@ class DebugPanelClass {
     // --- Consultas para el resto del motor -------------------------------------------
     static bool InfiniteLives();
     static bool InfiniteAmmo();
+    static bool InfiniteMana();
+    static bool SuperJump();
     static bool MaxWeapons();
     static bool IsGodMode();
     /// true si hay algun truco que haya que reaplicar cada frame.
@@ -59,6 +61,8 @@ class DebugPanelClass {
     // Trucos. static para poderlos consultar desde el motor sin pasar el objeto.
     static inline bool InfiniteLives_ = false;
     static inline bool InfiniteAmmo_ = false;
+    static inline bool InfiniteMana_ = false;
+    static inline bool SuperJump_ = false;
     static inline bool MaxWeapons_ = false;
     static inline bool GodMode_ = false;
 };

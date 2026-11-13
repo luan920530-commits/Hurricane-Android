@@ -17,6 +17,7 @@
 #include "Player.hpp"
 #if defined(ANDROID)
 #  include "SDLPort/DebugPanel.hpp"
+#  include "SDLPort/TouchControls.hpp"
 #endif
 #include <stdio.h>
 #include <algorithm>
@@ -41,6 +42,14 @@
 
 extern bool DEMORecording;
 extern bool DEMOPlaying;
+
+bool SinglePlayerFemale = false;
+
+void SetSinglePlayerFemale(bool selected) {
+    if (SinglePlayerFemale != selected)
+        Player[0].SpritesLoaded = false;
+    SinglePlayerFemale = selected;
+}
 
 int Stage;     // Aktuelles Level
 int NewStage;  // Neues Level
@@ -672,6 +681,26 @@ bool PlayerClass::GetPlayerInput() {
                 }
             }
 
+#if defined(ANDROID)
+            // Der virtuelle Controller wirkt direkt auf die Spielaktionen, unabhaengig
+            // davon, ob die gespeicherte Steuerung auf Tastatur oder Joystick steht.
+            if (PlayerNumber == 0) {
+                using TouchAction = TouchControlsClass::VirtualAction;
+                if (TouchControls.IsActionPressed(TouchAction::MOVE_LEFT)) Aktion[AKTION_LINKS] = true;
+                if (TouchControls.IsActionPressed(TouchAction::MOVE_RIGHT)) Aktion[AKTION_RECHTS] = true;
+                if (TouchControls.IsActionPressed(TouchAction::DUCK)) Aktion[AKTION_DUCKEN] = true;
+                if (TouchControls.IsActionPressed(TouchAction::LOOK_UP)) Aktion[AKTION_OBEN] = true;
+                if (TouchControls.IsActionPressed(TouchAction::LOOK_DOWN)) Aktion[AKTION_UNTEN] = true;
+                if (TouchControls.IsActionPressed(TouchAction::JUMP)) Aktion[AKTION_JUMP] = true;
+                if (TouchControls.IsActionPressed(TouchAction::FIRE)) Aktion[AKTION_SHOOT] = true;
+                if (TouchControls.IsActionPressed(TouchAction::BLITZ)) Aktion[AKTION_BLITZ] = true;
+                if (TouchControls.IsActionPressed(TouchAction::POWERLINE)) Aktion[AKTION_POWERLINE] = true;
+                if (TouchControls.IsActionPressed(TouchAction::GRENADE)) Aktion[AKTION_GRANATE] = true;
+                if (TouchControls.IsActionPressed(TouchAction::SMARTBOMB)) Aktion[AKTION_SMARTBOMB] = true;
+                if (TouchControls.IsActionPressed(TouchAction::CYCLE_WEAPON)) Aktion[AKTION_WAFFEN_CYCLE] = true;
+            }
+#endif
+
             // Bewegungen aufnehmen ?
             if (DEMORecording)
                 RecordDemo();
@@ -1227,7 +1256,12 @@ void PlayerClass::AnimatePlayer() {
             AnimPhase = 2;  // das springen starten
             Handlung = PlayerActionEnum::SPRINGEN;
             JumpStart = ypos;
-            yspeed = -PLAYER_MAXJUMPSPEED;
+            float jump_speed = PLAYER_MAXJUMPSPEED;
+#if defined(ANDROID)
+            if (PlayerNumber == 0 && DebugPanelClass::SuperJump())
+                jump_speed *= 1.75f;
+#endif
+            yspeed = -jump_speed;
 
             JumpAdd = 0.0f;
 
@@ -2230,9 +2264,14 @@ void PlayerClass::AnimatePlayer() {
         if (yspeed > PLAYER_MAXJUMPSPEED)  // Schnellste "Fall-Geschwindigkeit" erreicht ?
             yspeed = PLAYER_MAXJUMPSPEED;
 
+        float max_jump_height = PLAYER_MAXJUMP;
+#if defined(ANDROID)
+        if (PlayerNumber == 0 && DebugPanelClass::SuperJump())
+            max_jump_height *= 2.0f;
+#endif
         if (InLiquid == false) {
-            if (ypos < JumpStart - PLAYER_MAXJUMP ||  // Höchster Punkt erreicht ? Dann den Fall
-                Aktion[AKTION_JUMP] == false)         // dazu addieren
+            if (ypos < JumpStart - max_jump_height ||  // Hoehe erreicht? Dann den Fall
+                Aktion[AKTION_JUMP] == false)          // dazu addieren
             {
                 // Der Wert, wie schnell man wieder runterkommt, wird jetzt aus der Sprunghöhe errechnet, sodass
                 // man bei einem kleinen Sprung viel schneller wieder runterkommt
@@ -2243,8 +2282,8 @@ void PlayerClass::AnimatePlayer() {
                     JumpAdd = 18.0f;
             }
         } else {
-            if (ypos < JumpStart - (PLAYER_MAXJUMP + 50) ||  // Höchster Punkt im Wasser liegt anders
-                Aktion[AKTION_JUMP] == false)                // dazu addieren
+            if (ypos < JumpStart - (max_jump_height + 50.0f) ||  // Hoechster Punkt im Wasser
+                Aktion[AKTION_JUMP] == false)                    // dazu addieren
                 JumpAdd = PLAYER_JUMPADDSPEED;
         }
     }
@@ -4284,6 +4323,8 @@ void PlayerClass::LoadSprites() {
 
     if (PlayerNumber == 1)
         prefix = "p2_";
+    else if (SinglePlayerFemale && NUMPLAYERS == 1)
+        prefix = "p1_female_";
     else
         prefix = "p1_";
 

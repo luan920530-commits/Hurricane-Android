@@ -42,7 +42,9 @@ enum {
   MENUZUSTAND_ENTERNAME = 11,
   MENUZUSTAND_LANGUAGE = 12,
   MENUZUSTAND_TASTEN = 13,
-  MENUZUSTAND_BUTTONS = 14
+  MENUZUSTAND_BUTTONS = 14,
+  MENUZUSTAND_CHARACTER = 15,
+  MENUZUSTAND_STORE = 16
 };
 
 // ----- Defines für die einzelnen Menu-Punkte
@@ -181,6 +183,7 @@ class MenuClass {
     DirectGraphicsSprite MenuGfx;    // Grafiken für das Menu
     DirectGraphicsSprite MenuKasten[2];
     DirectGraphicsSprite Skills;
+    DirectGraphicsSprite CharacterPortraits[2];  // Arcade-style single-player character cards
 
   public:
     // DKS - These are now members here instead of being globals in Main.cpp:

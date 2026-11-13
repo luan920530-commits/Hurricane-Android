@@ -5,9 +5,9 @@
 // Erleichtert das Abfragen von Tasten-Namen mit DInput
 // von Jörg Matthias Winterstein
 //
-// (c) 2002 Poke53280
+// (c) 2002 Hurrican contributors
 //
-// visit www.poke53280.de
+// keyboard name helper
 //
 //---------------------------------------------------------------------------------------
 

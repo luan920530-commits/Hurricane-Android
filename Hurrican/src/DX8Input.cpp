@@ -21,6 +21,7 @@
 #include "Main.hpp"
 #if defined(ANDROID)
 #  include "DX8Graphics.hpp"
+#  include "SDLPort/AndroidPort.hpp"
 #  include "TouchControls.hpp"
 #endif
 
@@ -187,6 +188,10 @@ void DirectInputClass::Exit() {
 bool DirectInputClass::UpdateTastatur() {
     SDL_PumpEvents();
 #if defined(ANDROID)
+    // Hay pantallas modales (fin de nivel, intro, etc.) con su propio bucle y sin el
+    // SDL_PollEvent de Main. Sin vaciar aqui los eventos finger, el toque nunca llegaba al
+    // mando y la pantalla parecia congelada.
+    Android_PumpTouchEvents();
     /*
      * Se refresca el buffer propio con el estado real del teclado (teclados USB, gamepads o
      * pulsaciones de teclas que Android entrega como eventos de teclado) y despues el mando
@@ -200,8 +205,8 @@ bool DirectInputClass::UpdateTastatur() {
         }
         TastaturPuffer = TouchKeyboard;
     }
-    TouchControls.Update(DirectGraphics.GetRenderRect(), DirectGraphics.GetWindowWidth(),
-                         DirectGraphics.GetWindowHeight());
+    const SDL_Rect touch_area{0, 0, DirectGraphics.GetWindowWidth(), DirectGraphics.GetWindowHeight()};
+    TouchControls.Update(touch_area, DirectGraphics.GetWindowWidth(), DirectGraphics.GetWindowHeight());
 #endif
     return true;
 }
@@ -262,10 +267,22 @@ bool DirectInputClass::AreAllKeysReleased() const {
 // --------------------------------------------------------------------------------------
 
 bool DirectInputClass::AnyKeyDown() const {
-    for (int i = 0; i < std::min(NumberOfKeys, MAX_KEYS); i++)
+#if SDL_VERSION_ATLEAST(2, 0, 0)
+    // SDL2 expone el teclado indexado por SDL_Scancode. En Android el mando virtual escribe
+    // directamente en ese mismo buffer; tratar el indice como SDLK con KeyDown(i) ignora
+    // teclas como Ctrl/Alt y, por tanto, no deja salir de la pantalla de fin de nivel.
+    if (TastaturPuffer == nullptr)
+        return false;
+    for (int scancode = 0; scancode < std::min(NumberOfKeys, MAX_KEYS); ++scancode) {
+        if (TastaturPuffer[scancode] != 0)
+            return true;
+    }
+#else
+    for (int i = 0; i < std::min(NumberOfKeys, MAX_KEYS); ++i) {
         if (KeyDown(i))
             return true;
-
+    }
+#endif
     return false;
 }
 

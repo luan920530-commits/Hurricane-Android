@@ -1,0 +1,191 @@
+{
+  "frames": {
+    "man_jump_0": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 144,
+        "h": 164
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 144,
+        "h": 164
+      },
+      "sourceSize": {
+        "w": 144,
+        "h": 164
+      },
+      "duration": 83
+    },
+    "man_jump_1": {
+      "frame": {
+        "x": 144,
+        "y": 0,
+        "w": 144,
+        "h": 164
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 144,
+        "h": 164
+      },
+      "sourceSize": {
+        "w": 144,
+        "h": 164
+      },
+      "duration": 83
+    },
+    "man_jump_2": {
+      "frame": {
+        "x": 288,
+        "y": 0,
+        "w": 144,
+        "h": 164
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 144,
+        "h": 164
+      },
+      "sourceSize": {
+        "w": 144,
+        "h": 164
+      },
+      "duration": 83
+    },
+    "man_jump_3": {
+      "frame": {
+        "x": 432,
+        "y": 0,
+        "w": 144,
+        "h": 164
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 144,
+        "h": 164
+      },
+      "sourceSize": {
+        "w": 144,
+        "h": 164
+      },
+      "duration": 83
+    },
+    "man_jump_4": {
+      "frame": {
+        "x": 576,
+        "y": 0,
+        "w": 144,
+        "h": 164
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 144,
+        "h": 164
+      },
+      "sourceSize": {
+        "w": 144,
+        "h": 164
+      },
+      "duration": 83
+    },
+    "man_jump_5": {
+      "frame": {
+        "x": 720,
+        "y": 0,
+        "w": 144,
+        "h": 164
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 144,
+        "h": 164
+      },
+      "sourceSize": {
+        "w": 144,
+        "h": 164
+      },
+      "duration": 83
+    },
+    "man_jump_6": {
+      "frame": {
+        "x": 864,
+        "y": 0,
+        "w": 144,
+        "h": 164
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 144,
+        "h": 164
+      },
+      "sourceSize": {
+        "w": 144,
+        "h": 164
+      },
+      "duration": 83
+    },
+    "man_jump_7": {
+      "frame": {
+        "x": 1008,
+        "y": 0,
+        "w": 144,
+        "h": 164
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 144,
+        "h": 164
+      },
+      "sourceSize": {
+        "w": 144,
+        "h": 164
+      },
+      "duration": 83
+    }
+  },
+  "meta": {
+    "app": "vex",
+    "version": "0.1.0",
+    "image": "man_jump.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 1152,
+      "h": 164
+    },
+    "scale": "2",
+    "frameTags": [
+      {
+        "name": "man_jump",
+        "from": 0,
+        "to": 7,
+        "direction": "forward"
+      }
+    ]
+  }
+}

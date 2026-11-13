@@ -34,7 +34,6 @@ Enjoy!
     
 
     
-          get Hurrican at... www.hurrican-game.de
                         
     
     

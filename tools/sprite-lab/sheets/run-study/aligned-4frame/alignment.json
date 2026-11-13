@@ -1,0 +1,62 @@
+{
+  "cell": [
+    70,
+    80
+  ],
+  "scale_normalization": "all four key poses use the same per-character scale, computed from the maximum trimmed width/height before fitting; prevents pose-dependent zoom",
+  "alignment": "integer horizontal translation by alpha centroid in x=8..49,y=6..54; y preserved for run bounce",
+  "operators": {
+    "male": {
+      "anchor_centers_before": [
+        [
+          32.62,
+          30.59
+        ],
+        [
+          32.47,
+          30.21
+        ],
+        [
+          32.79,
+          30.31
+        ],
+        [
+          31.39,
+          31.94
+        ]
+      ],
+      "x_offsets_px": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    "female": {
+      "anchor_centers_before": [
+        [
+          25.77,
+          33.31
+        ],
+        [
+          25.52,
+          33.35
+        ],
+        [
+          32.45,
+          35.73
+        ],
+        [
+          29.71,
+          35.65
+        ]
+      ],
+      "x_offsets_px": [
+        6,
+        6,
+        -1,
+        2
+      ]
+    }
+  }
+}

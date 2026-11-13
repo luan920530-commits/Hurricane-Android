@@ -7,6 +7,13 @@
 #include "Gegner_Diamant.hpp"
 #include "Gegner_Punisher.hpp"
 #include "stdafx.hpp"
+#if defined(ANDROID)
+#include "Gameplay.hpp"
+#include "Main.hpp"
+#include "SDLPort/Store.hpp"
+extern bool DEMOPlaying;
+extern bool DEMORecording;
+#endif
 
 // --------------------------------------------------------------------------------------
 // Konstruktor
@@ -101,6 +108,12 @@ void GegnerDiamant::DoKI() {
                 Projectiles.PushProjectile(xPos, yPos, DIAMONDSHOT);
             }
 
+#if defined(ANDROID)
+            // A diamond can overlap both players in the same frame: award only once.
+            if (Energy > 0.0f && !RunningTutorial && !DEMOPlaying && !DEMORecording && !HasCheated &&
+                !g_config_ext.empty())
+                OfflineStore::Award(g_config_ext + "/offline-store-v1.txt");
+#endif
             Player[0].Score += 100;         // Punkte erhöhen
             Player[0].CollectedDiamonds++;  // Zahl gesammelter Diamanten erhöhen
             Player[0].DiamondsThisLevel++;

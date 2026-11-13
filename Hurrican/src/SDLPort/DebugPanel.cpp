@@ -6,6 +6,8 @@
  *
  *   - Vidas infinitas      (no se descuenta ninguna vida)
  *   - Municion infinita    (granadas, powerlines y smart bombs siempre llenas)
+ *   - Mana infinito        (recarga constante del recurso Armour)
+ *   - Super salto          (mas impulso y altura al saltar)
  *   - Armas al maximo      (las cuatro armas al nivel maximo)
  *   - Modo invulnerable    (GodMode del motor: no recibe dano)
  *   - Mostrar FPS          (contador de fotogramas del motor)
@@ -29,8 +31,10 @@
 #  include <algorithm>
 #  include <string>
 
+#  include "DX8Font.hpp"
 #  include "DX8Graphics.hpp"
 #  include "DX8Input.hpp"
+#  include "Globals.hpp"
 #  include "Logdatei.hpp"
 #  include "Main.hpp"
 #  include "Player.hpp"
@@ -40,15 +44,21 @@ DebugPanelClass DebugPanel;
 
 namespace {
 
-constexpr int OPT_COUNT = 7;
+constexpr int OPT_COUNT = 9;
 
 enum OptionId {
     OPT_LIVES = 0,
     OPT_AMMO,
+    OPT_MANA,
+    OPT_SUPER_JUMP,
     OPT_WEAPONS,
     OPT_GODMODE,
     OPT_FPS,
     OPT_EDIT,
+    /*
+     * Calidad del escalado final del fotograma (vease shader_upscale.frag). No es un
+     * interruptor: recorre las tres calidades (nitido, suave, maximo).
+     */
     OPT_UPSCALE,
 };
 
@@ -57,16 +67,12 @@ struct Option {
     bool *value;
 };
 
-/*
- * Calidades de escalado, en el mismo orden que el shader (vease shader_upscale.frag):
- *   0 nitido, 1 suave, 2 maximo.
- * El interruptor de la ultima fila recorre las tres.
- */
-const char *const UPSCALE_LABELS[] = {"Nitido", "Suave", "Maximo"};
-
 /// Niveles "de verdad" del motor: por encima de esto hay armas especiales que no se pueden
 /// activar sin el power-up correspondiente, asi que el truco deja las armas al 8.
 constexpr int MAX_SANE_WEAPON_LEVEL = 8;
+
+/// Nombres de las tres calidades de escalado, en el orden del shader.
+const char *const UPSCALE_LABELS[] = {"Nitido", "Suave", "Maximo"};
 
 }  // namespace
 
@@ -80,6 +86,14 @@ bool DebugPanelClass::InfiniteLives() {
 
 bool DebugPanelClass::InfiniteAmmo() {
     return InfiniteAmmo_;
+}
+
+bool DebugPanelClass::InfiniteMana() {
+    return InfiniteMana_;
+}
+
+bool DebugPanelClass::SuperJump() {
+    return SuperJump_;
 }
 
 bool DebugPanelClass::MaxWeapons() {
@@ -101,7 +115,11 @@ void DebugPanelClass::SetOpen(bool open) {
      * jugador se queda andando o disparando solo mientras navega por los interruptores.
      */
     if (open_) {
-        TouchControls.ReleaseAll();
+        /*
+         * CancelTouches() suelta todos los dedos y todas las teclas (antes esta lista era
+         * fija: solo cinco teclas, y las acciones del mando se quedaban pegadas).
+         */
+        TouchControls.CancelTouches();
     }
 
     Protokoll << "Panel de depuracion: " << (open_ ? "abierto" : "cerrado") << std::endl;
@@ -117,7 +135,7 @@ void DebugPanelClass::SetGodMode(bool enabled) {
 }
 
 bool DebugPanelClass::AnyActive() {
-    return InfiniteLives_ || InfiniteAmmo_ || MaxWeapons_ || GodMode_;
+    return InfiniteLives_ || InfiniteAmmo_ || InfiniteMana_ || MaxWeapons_ || GodMode_;
 }
 
 void DebugPanelClass::ApplyGodMode() {
@@ -156,6 +174,9 @@ void DebugPanelClass::ApplyFrameCheats() {
                 pl.SmartBombs = 9;
         }
 
+        if (InfiniteMana_)
+            pl.Armour = MAX_ARMOUR;
+
         if (MaxWeapons_) {
             for (int w = 0; w < 4; w++) {
                 if (pl.CurrentWeaponLevel[w] < MAX_SANE_WEAPON_LEVEL)
@@ -178,8 +199,9 @@ bool DebugPanelClass::PanelRect(const SDL_Rect &screen_rect, SDL_FRect &out) con
     if (screen_rect.w <= 0 || screen_rect.h <= 0)
         return false;
 
-    const float w = static_cast<float>(screen_rect.w) * 0.52f;
-    const float h = static_cast<float>(screen_rect.h) * 0.66f;
+    const bool portrait = screen_rect.h > screen_rect.w;
+    const float w = static_cast<float>(screen_rect.w) * (portrait ? 0.90f : 0.60f);
+    const float h = static_cast<float>(screen_rect.h) * (portrait ? 0.74f : 0.72f);
     out.x = screen_rect.x + (static_cast<float>(screen_rect.w) - w) * 0.5f;
     out.y = screen_rect.y + (static_cast<float>(screen_rect.h) - h) * 0.5f;
     out.w = w;
@@ -222,6 +244,12 @@ bool DebugPanelClass::HandleTouch(float nx, float ny, bool down, const SDL_Rect 
             case OPT_AMMO:
                 InfiniteAmmo_ = !InfiniteAmmo_;
                 break;
+            case OPT_MANA:
+                InfiniteMana_ = !InfiniteMana_;
+                break;
+            case OPT_SUPER_JUMP:
+                SuperJump_ = !SuperJump_;
+                break;
             case OPT_WEAPONS:
                 MaxWeapons_ = !MaxWeapons_;
                 break;
@@ -236,7 +264,7 @@ bool DebugPanelClass::HandleTouch(float nx, float ny, bool down, const SDL_Rect 
                 break;
             case OPT_UPSCALE: {
                 /*
-                 * Recorre las tres calidades. Se hace en caliente (recompila un shader
+                 * Recorre las tres calidades. Se aplica en caliente (recompila un shader
                  * pequeno) para poder comparar el aspecto sin reiniciar el juego.
                  */
                 const int siguiente = (DirectGraphics.GetUpscale() + 1) % 3;
@@ -278,74 +306,94 @@ void DebugPanelClass::Draw(const SDL_Rect &screen_rect) {
         DirectGraphics.DrawColorVertices(GL_TRIANGLE_STRIP, 4, v, matrix);
     };
 
-    // Fondo semitransparente y barra de titulo.
-    quad(panel, 0xE0141820);
-    quad(SDL_FRect{panel.x, panel.y, panel.w, panel.h * 0.10f}, 0xF0304870);
-
-    // Filas: rectangulo + indicador de estado (cuadrado verde = activado).
-    const float filas = static_cast<float>(OPT_COUNT) + 2.0f;
-    const float alto_fila = panel.h / filas;
     const Option options[OPT_COUNT] = {
         {"Vidas infinitas", &InfiniteLives_},
         {"Municion infinita", &InfiniteAmmo_},
+        {"Mana infinita", &InfiniteMana_},
+        {"Super salto", &SuperJump_},
         {"Armas al maximo", &MaxWeapons_},
         {"Invulnerable", &GodMode_},
         {"Mostrar FPS", &CommandLineParams.ShowFPS},
         {"Editar controles", nullptr},
-        /* El estado de esta fila se dibuja aparte: no es un booleano sino 3 calidades. */
         {"Calidad de imagen", nullptr},
     };
 
-    for (int i = 0; i < OPT_COUNT; i++) {
+    const float filas = static_cast<float>(OPT_COUNT) + 2.0f;
+    const float alto_fila = panel.h / filas;
+    const float title_h = alto_fila;
+    const float switch_w = std::min(alto_fila * 1.12f, panel.w * 0.24f);
+    const float switch_h = alto_fila * 0.54f;
+    const float switch_x = panel.x + panel.w - switch_w - alto_fila * 0.24f;
+
+    const int previous_scale = pDefaultFont != nullptr ? pDefaultFont->GetScaleFactor() : 1;
+    if (pDefaultFont != nullptr) {
+        const int scale = std::clamp(
+            static_cast<int>(std::min(panel.w / 190.0f, static_cast<float>(screen_rect.h) / 360.0f)), 1, 4);
+        pDefaultFont->SetScaleFactor(scale);
+    }
+
+    // Oscurecer el juego para que el panel se lea como un menu modal.
+    quad(SDL_FRect{static_cast<float>(screen_rect.x), static_cast<float>(screen_rect.y),
+                   static_cast<float>(screen_rect.w), static_cast<float>(screen_rect.h)}, 0x90000000);
+    quad(panel, 0xF01A202A);
+    quad(SDL_FRect{panel.x, panel.y, panel.w, title_h}, 0xFF304870);
+
+    if (pDefaultFont != nullptr) {
+        const float title_y = panel.y + (title_h - pDefaultFont->GetYCharSize()) * 0.5f;
+        pDefaultFont->DrawTextCenterAlign(panel.x + panel.w * 0.5f, title_y,
+                                          "MENU DE DESARROLLO", 0xFFFFFFFF, 0);
+    }
+
+    for (int i = 0; i < OPT_COUNT; ++i) {
         const float y = panel.y + alto_fila * static_cast<float>(i + 1);
-
-        // Fila alterna para que se distingan.
-        quad(SDL_FRect{panel.x + alto_fila * 0.15f, y, panel.w - alto_fila * 0.30f, alto_fila * 0.88f},
-             (i % 2 == 0) ? 0x30FFFFFF : 0x1CFFFFFF);
-
-        /*
-         * Interruptor. La fila de calidad de imagen no es un interruptor, sino un selector de
-         * tres estados: se dibujan tres marcas y se resalta la activa.
-         */
-        bool on = false;
+        const SDL_FRect row{panel.x + alto_fila * 0.15f, y,
+                            panel.w - alto_fila * 0.30f, alto_fila * 0.88f};
+        quad(row, (i % 2 == 0) ? 0x30FFFFFF : 0x1CFFFFFF);
 
         if (i == OPT_UPSCALE) {
             /*
-             * No es un interruptor, sino un selector de tres estados: se dibujan tres marcas
-             * (nitido / suave / maximo) y se resalta la activa.
+             * Fila de calidad: en vez de ON/OFF se dibujan tres marcas y se resalta la
+             * activa, y el nombre de la calidad va en el lado derecho.
              */
             const int actual = DirectGraphics.GetUpscale();
-            on = (actual > 0);
-            const float lado = alto_fila * 0.42f;
-            for (int q = 0; q < 3; q++) {
-                const float x = panel.x + panel.w - alto_fila * (1.10f + (2 - q) * 0.60f);
+            const float lado = switch_h * 0.8f;
+            for (int q = 0; q < 3; ++q) {
+                const float x = switch_x + switch_w - lado - static_cast<float>(2 - q) * (lado + alto_fila * 0.12f);
                 quad(SDL_FRect{x, y + (alto_fila - lado) * 0.5f, lado, lado},
-                     (q == actual) ? 0xFF50E070 : 0xFF505A68);
+                     (q == actual) ? 0xFF23864A : 0xFF46515E);
+            }
+
+            if (pDefaultFont != nullptr) {
+                const float label_x = panel.x + alto_fila * 0.35f;
+                const float label_y = y + (alto_fila - pDefaultFont->GetYCharSize()) * 0.5f;
+                pDefaultFont->DrawText(label_x, label_y, options[i].label, 0xFFFFFFFF);
             }
         } else {
-            on = options[i].value != nullptr ? *options[i].value : TouchControls.IsEditing();
-            const std::uint32_t color = on ? 0xFF50E070 : 0xFF505A68;
-            const float lado = alto_fila * 0.52f;
-            quad(SDL_FRect{panel.x + panel.w - alto_fila * 1.10f, y + (alto_fila - lado) * 0.5f, lado, lado},
-                 color);
-        }
+            const bool on = options[i].value != nullptr ? *options[i].value : TouchControls.IsEditing();
+            const SDL_FRect toggle{switch_x, y + (alto_fila - switch_h) * 0.5f, switch_w, switch_h};
+            quad(toggle, on ? 0xFF23864A : 0xFF46515E);
 
-        /*
-         * Etiqueta: el motor no puede dibujar texto sin fuente cargada, asi que se marca el
-         * numero de fila y el panel se documenta en la ayuda del boton DBG. Para que sea
-         * legible de un vistazo, las filas activadas llevan una barra ancha y las apagadas
-         * una fina.
-         */
-        quad(SDL_FRect{panel.x + alto_fila * 0.35f, y + alto_fila * 0.32f,
-                       panel.w * (on ? 0.40f : 0.18f), alto_fila * 0.26f},
-             on ? 0xC0FFFFFF : 0x60FFFFFF);
+            if (pDefaultFont != nullptr) {
+                const float label_x = panel.x + alto_fila * 0.35f;
+                const float label_y = y + (alto_fila - pDefaultFont->GetYCharSize()) * 0.5f;
+                pDefaultFont->DrawText(label_x, label_y, options[i].label, 0xFFFFFFFF);
+
+                const char *state = on ? "ON" : "OFF";
+                const float state_y = toggle.y + (toggle.h - pDefaultFont->GetYCharSize()) * 0.5f;
+                pDefaultFont->DrawTextCenterAlign(toggle.x + toggle.w * 0.5f, state_y, state, 0xFFFFFFFF, 0);
+            }
+        }
     }
 
-    // Boton de cerrar.
-    const float y_close = panel.y + alto_fila * static_cast<float>(OPT_COUNT + 1);
-    quad(SDL_FRect{panel.x + panel.w * 0.25f, y_close + alto_fila * 0.12f, panel.w * 0.5f,
-                   alto_fila * 0.62f},
-         0xF0A03030);
+    const float close_y = panel.y + alto_fila * static_cast<float>(OPT_COUNT + 1);
+    const SDL_FRect close{panel.x + panel.w * 0.25f, close_y + alto_fila * 0.12f,
+                          panel.w * 0.5f, alto_fila * 0.62f};
+    quad(close, 0xFFE04A4A);
+    if (pDefaultFont != nullptr) {
+        const float close_text_y = close.y + (close.h - pDefaultFont->GetYCharSize()) * 0.5f;
+        pDefaultFont->DrawTextCenterAlign(panel.x + panel.w * 0.5f, close_text_y, "CERRAR", 0xFFFFFFFF, 0);
+        pDefaultFont->SetScaleFactor(previous_scale);
+    }
 }
 
 #endif /* ANDROID */
