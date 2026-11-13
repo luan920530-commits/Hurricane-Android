@@ -1,44 +1,57 @@
-# APK de esta compilación
+# APK de esta compilación (todo integrado)
 
-**Ejecución:** [Build APK #43219213957](https://github.com/luan920530-commits/Hurricane-Android/actions/runs/43219213957)
-**Rama:** `arena/cd11f369-hurricane-android` · **commit:** `cbfd5a8`
-**Artefacto:** `hurrican-android-debug` (45,84 MB), válido hasta el **12/12/2026**.
+**Ejecución:** [Build APK #43344401036](https://github.com/luan920530-commits/Hurricane-Android/actions/runs/43344401036)
+**Rama:** `arena/cd11f369-hurricane-android` · **commit:** `6724a3f` (fusión de `main`)
+**Artefacto:** `hurrican-android-debug` — **45,2 MB** (antes 43,7 MB: +1,5 MB de arte nuevo)
 
 ## Descargar
 
-1. Abre la ejecución: <https://github.com/luan920530-commits/Hurricane-Android/actions/runs/43219213957>
-2. Abajo, en **Artifacts**, pulsa **hurrican-android-debug**. Se descarga un `.zip`.
-3. Descomprime: dentro está `app-debug.apk` (y los símbolos de depuración).
-
-> El ZIP hay que descomprimirlo: la APK de dentro es la que se instala. Si el móvil avisa de
-> "aplicación de origen desconocido", hay que permitir la instalación desde esa app concreta.
-
-## Instalar
+1. <https://github.com/luan920530-commits/Hurricane-Android/actions/runs/43344401036>
+2. Abajo, en **Artifacts** → **hurrican-android-debug**
+3. Descomprime el `.zip` → `app-debug.apk`
 
 ```bash
 adb install -r app-debug.apk
 ```
 
-O copiando la APK al móvil y abriéndola. Es **debug**: convive sin problema con una versión
-anterior, pero hay que desinstalar la antigua si cambió la firma.
+> La primera vez tras esta versión **se vuelven a copiar los datos** (~10 s con cartel de
+> carga): los iconos táctiles y la skin son ficheros nuevos y se ha subido la versión de
+> assets.
 
-## Qué mirar en esta build
+## Qué hay ahora en el APK
+
+De esta rama (lo que ya probaste):
+- Escalado **Nítido / Suave / Máximo** (panel DBG → *Calidad de imagen*).
+- **Pausa automática** al salir de la app con una partida en marcha.
+- Todas las correcciones de pantalla negra / cierres.
+
+De `main` (nuevo aquí):
+- **Mando con arte**: marco táctico metálico + iconos dibujados (antes eran círculos).
+- **El layout se guarda**: lo que coloques en modo edición se queda entre ejecuciones.
+- **Acciones directas**: el mando responde aunque el perfil guardado sea "joystick".
+- **Tienda offline** en el menú (1 diamante = 1 moneda; vidas, arma, bombas).
+- **Personaje femenino** seleccionable.
+- Trucos nuevos: **maná infinito** y **super salto** (además de los que ya había).
+
+## Qué mirar
 
 | Zona | Qué probar |
 |---|---|
-| Arranque | Debe verse el cartel de carga y, en el primer arranque, la copia de datos (~91 MB, ~10 s). Ya no debe cerrarse en negro |
-| Mando | Joystick flotante a la izquierda (aparece donde toques), botones en arco a la derecha: **B** dispara, **A** salta |
-| Panel DBG | Botón arriba a la derecha: vidas/munición infinitas, invulnerable, FPS, editar controles y **Calidad de imagen** |
-| Calidad de imagen | Compara *Nítido* / *Suave* / *Máximo* en el panel: se aplica al instante. Dime cuál se ve mejor |
-| Pausa | Sal de la app (botón inicio) con una partida en marcha y vuelve: debe estar en el menú con *Continuar partida* y no disparar solo |
-| Contexto GL | Minimiza y vuelve varias veces: no debe quedarse en negro |
+| Arranque | cartel de carga + copia de datos; no debe cerrarse |
+| Mando | ¿el marco y los iconos se ven bien y no tapan demasiado? |
+| Guardado del layout | mover un botón en modo edición → cerrar la app → abrir: sigue ahí |
+| Calidad de imagen | comparar las tres en el panel y decirme cuál prefieres |
+| Tienda | entrar, comprar una vida, empezar partida nueva y ver si se aplica |
+| Personaje | seleccionar el femenino y comprobar las animaciones al correr/saltar |
+| Pausa | salir a inicio en mitad de partida y volver |
 
 ## Si algo falla
 
 ```bash
-adb logcat -s Hurrican                    # registro del motor en vivo
+adb logcat -s Hurrican
 adb shell run-as org.hurrican.game cat files/save/Game_Log.txt
 ```
 
-Pásame las últimas ~30 líneas: casi todo lo que puede fallar deja ahí el motivo (shader,
-textura, fichero que falta). El motivo de un cierre también se añade al final de ese fichero.
+Los ficheros que guarda la app ahora son: `save/Hurrican.cfg`, `save/touch-layout-v1.txt`
+(posición de los botones), `save/offline-store-v1.txt` (monedas y compras) y
+`save/Game_Log.txt`.
